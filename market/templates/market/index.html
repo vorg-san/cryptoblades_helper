@@ -1,0 +1,15 @@
+{% extends "market/base_generic.html" %}
+
+{% block content %}
+<h3 align="center">Weapons</h3>
+
+<br><br>
+
+<div class="row">
+<div class="col-10 offset-1">
+	<a class="btn btn-primary" href="{% url 'market:load weapons' %}">Load</a>
+	<br><br>
+	{% include "market/table.html" with data=weapons %}
+</div>
+</div>
+{% endblock %}

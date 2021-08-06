@@ -1,0 +1,13 @@
+{% if data %}
+	<table>
+		<thead>
+		{% for field in data|get_list_item:0|invoke:'_meta'|.fields %}
+			<th>{{ field }}</th>
+		{% endfor %}
+		</thead>
+		<tbody>
+		</tbody>
+	</table>
+{% else %}
+	No data available.
+{% endif %}
