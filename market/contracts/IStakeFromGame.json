@@ -1,0 +1,320 @@
+{
+  "contractName": "IStakeFromGame",
+  "abi": [
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "player",
+          "type": "address"
+        },
+        {
+          "internalType": "uint256",
+          "name": "amount",
+          "type": "uint256"
+        }
+      ],
+      "name": "stakeFromGame",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    }
+  ],
+  "metadata": "{\"compiler\":{\"version\":\"0.6.5+commit.f956cc89\"},\"language\":\"Solidity\",\"output\":{\"abi\":[{\"inputs\":[{\"internalType\":\"address\",\"name\":\"player\",\"type\":\"address\"},{\"internalType\":\"uint256\",\"name\":\"amount\",\"type\":\"uint256\"}],\"name\":\"stakeFromGame\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"}],\"devdoc\":{\"methods\":{}},\"userdoc\":{\"methods\":{}}},\"settings\":{\"compilationTarget\":{\"/C/Users/Dan/Desktop/code/pessoal/CB_original/cryptoblades/contracts/interfaces/IStakeFromGame.sol\":\"IStakeFromGame\"},\"evmVersion\":\"istanbul\",\"libraries\":{},\"metadata\":{\"bytecodeHash\":\"ipfs\"},\"optimizer\":{\"enabled\":true,\"runs\":200},\"remappings\":[]},\"sources\":{\"/C/Users/Dan/Desktop/code/pessoal/CB_original/cryptoblades/contracts/interfaces/IStakeFromGame.sol\":{\"keccak256\":\"0x9b192e89c359ec2948dde4e81454299a87e93916751a8c109fd44760f95f31a2\",\"urls\":[\"bzz-raw://016c65ef318a70d4d27c4fc8f4c5361ac3671c665f8bbbf4b45eeab331f11440\",\"dweb:/ipfs/QmaC1UCyU9nV2XEWLKF7cQuLGtNkvZd2vCKrWCvMZzEroW\"]}},\"version\":1}",
+  "bytecode": "0x",
+  "deployedBytecode": "0x",
+  "immutableReferences": {},
+  "sourceMap": "",
+  "deployedSourceMap": "",
+  "source": "pragma solidity ^0.6.5;\r\n\r\ninterface IStakeFromGame {\r\n    function stakeFromGame(address player, uint256 amount) external;\r\n}\r\n",
+  "sourcePath": "C:\\Users\\Dan\\Desktop\\code\\pessoal\\CB_original\\cryptoblades\\contracts\\interfaces\\IStakeFromGame.sol",
+  "ast": {
+    "absolutePath": "/C/Users/Dan/Desktop/code/pessoal/CB_original/cryptoblades/contracts/interfaces/IStakeFromGame.sol",
+    "exportedSymbols": {
+      "IStakeFromGame": [
+        8903
+      ]
+    },
+    "id": 8904,
+    "nodeType": "SourceUnit",
+    "nodes": [
+      {
+        "id": 8895,
+        "literals": [
+          "solidity",
+          "^",
+          "0.6",
+          ".5"
+        ],
+        "nodeType": "PragmaDirective",
+        "src": "0:23:22"
+      },
+      {
+        "abstract": false,
+        "baseContracts": [],
+        "contractDependencies": [],
+        "contractKind": "interface",
+        "documentation": null,
+        "fullyImplemented": false,
+        "id": 8903,
+        "linearizedBaseContracts": [
+          8903
+        ],
+        "name": "IStakeFromGame",
+        "nodeType": "ContractDefinition",
+        "nodes": [
+          {
+            "body": null,
+            "documentation": null,
+            "functionSelector": "668e0122",
+            "id": 8902,
+            "implemented": false,
+            "kind": "function",
+            "modifiers": [],
+            "name": "stakeFromGame",
+            "nodeType": "FunctionDefinition",
+            "overrides": null,
+            "parameters": {
+              "id": 8900,
+              "nodeType": "ParameterList",
+              "parameters": [
+                {
+                  "constant": false,
+                  "id": 8897,
+                  "name": "player",
+                  "nodeType": "VariableDeclaration",
+                  "overrides": null,
+                  "scope": 8902,
+                  "src": "82:14:22",
+                  "stateVariable": false,
+                  "storageLocation": "default",
+                  "typeDescriptions": {
+                    "typeIdentifier": "t_address",
+                    "typeString": "address"
+                  },
+                  "typeName": {
+                    "id": 8896,
+                    "name": "address",
+                    "nodeType": "ElementaryTypeName",
+                    "src": "82:7:22",
+                    "stateMutability": "nonpayable",
+                    "typeDescriptions": {
+                      "typeIdentifier": "t_address",
+                      "typeString": "address"
+                    }
+                  },
+                  "value": null,
+                  "visibility": "internal"
+                },
+                {
+                  "constant": false,
+                  "id": 8899,
+                  "name": "amount",
+                  "nodeType": "VariableDeclaration",
+                  "overrides": null,
+                  "scope": 8902,
+                  "src": "98:14:22",
+                  "stateVariable": false,
+                  "storageLocation": "default",
+                  "typeDescriptions": {
+                    "typeIdentifier": "t_uint256",
+                    "typeString": "uint256"
+                  },
+                  "typeName": {
+                    "id": 8898,
+                    "name": "uint256",
+                    "nodeType": "ElementaryTypeName",
+                    "src": "98:7:22",
+                    "typeDescriptions": {
+                      "typeIdentifier": "t_uint256",
+                      "typeString": "uint256"
+                    }
+                  },
+                  "value": null,
+                  "visibility": "internal"
+                }
+              ],
+              "src": "81:32:22"
+            },
+            "returnParameters": {
+              "id": 8901,
+              "nodeType": "ParameterList",
+              "parameters": [],
+              "src": "122:0:22"
+            },
+            "scope": 8903,
+            "src": "59:64:22",
+            "stateMutability": "nonpayable",
+            "virtual": false,
+            "visibility": "external"
+          }
+        ],
+        "scope": 8904,
+        "src": "27:99:22"
+      }
+    ],
+    "src": "0:128:22"
+  },
+  "legacyAST": {
+    "attributes": {
+      "absolutePath": "/C/Users/Dan/Desktop/code/pessoal/CB_original/cryptoblades/contracts/interfaces/IStakeFromGame.sol",
+      "exportedSymbols": {
+        "IStakeFromGame": [
+          8903
+        ]
+      }
+    },
+    "children": [
+      {
+        "attributes": {
+          "literals": [
+            "solidity",
+            "^",
+            "0.6",
+            ".5"
+          ]
+        },
+        "id": 8895,
+        "name": "PragmaDirective",
+        "src": "0:23:22"
+      },
+      {
+        "attributes": {
+          "abstract": false,
+          "baseContracts": [
+            null
+          ],
+          "contractDependencies": [
+            null
+          ],
+          "contractKind": "interface",
+          "documentation": null,
+          "fullyImplemented": false,
+          "linearizedBaseContracts": [
+            8903
+          ],
+          "name": "IStakeFromGame",
+          "scope": 8904
+        },
+        "children": [
+          {
+            "attributes": {
+              "body": null,
+              "documentation": null,
+              "functionSelector": "668e0122",
+              "implemented": false,
+              "isConstructor": false,
+              "kind": "function",
+              "modifiers": [
+                null
+              ],
+              "name": "stakeFromGame",
+              "overrides": null,
+              "scope": 8903,
+              "stateMutability": "nonpayable",
+              "virtual": false,
+              "visibility": "external"
+            },
+            "children": [
+              {
+                "children": [
+                  {
+                    "attributes": {
+                      "constant": false,
+                      "name": "player",
+                      "overrides": null,
+                      "scope": 8902,
+                      "stateVariable": false,
+                      "storageLocation": "default",
+                      "type": "address",
+                      "value": null,
+                      "visibility": "internal"
+                    },
+                    "children": [
+                      {
+                        "attributes": {
+                          "name": "address",
+                          "stateMutability": "nonpayable",
+                          "type": "address"
+                        },
+                        "id": 8896,
+                        "name": "ElementaryTypeName",
+                        "src": "82:7:22"
+                      }
+                    ],
+                    "id": 8897,
+                    "name": "VariableDeclaration",
+                    "src": "82:14:22"
+                  },
+                  {
+                    "attributes": {
+                      "constant": false,
+                      "name": "amount",
+                      "overrides": null,
+                      "scope": 8902,
+                      "stateVariable": false,
+                      "storageLocation": "default",
+                      "type": "uint256",
+                      "value": null,
+                      "visibility": "internal"
+                    },
+                    "children": [
+                      {
+                        "attributes": {
+                          "name": "uint256",
+                          "type": "uint256"
+                        },
+                        "id": 8898,
+                        "name": "ElementaryTypeName",
+                        "src": "98:7:22"
+                      }
+                    ],
+                    "id": 8899,
+                    "name": "VariableDeclaration",
+                    "src": "98:14:22"
+                  }
+                ],
+                "id": 8900,
+                "name": "ParameterList",
+                "src": "81:32:22"
+              },
+              {
+                "attributes": {
+                  "parameters": [
+                    null
+                  ]
+                },
+                "children": [],
+                "id": 8901,
+                "name": "ParameterList",
+                "src": "122:0:22"
+              }
+            ],
+            "id": 8902,
+            "name": "FunctionDefinition",
+            "src": "59:64:22"
+          }
+        ],
+        "id": 8903,
+        "name": "ContractDefinition",
+        "src": "27:99:22"
+      }
+    ],
+    "id": 8904,
+    "name": "SourceUnit",
+    "src": "0:128:22"
+  },
+  "compiler": {
+    "name": "solc",
+    "version": "0.6.5+commit.f956cc89.Emscripten.clang"
+  },
+  "networks": {},
+  "schemaVersion": "3.3.4",
+  "updatedAt": "2021-08-09T12:18:06.989Z",
+  "devdoc": {
+    "methods": {}
+  },
+  "userdoc": {
+    "methods": {}
+  }
+}

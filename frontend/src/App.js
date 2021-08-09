@@ -2,12 +2,28 @@ import './App.css'
 import React, {useState, useEffect, useCallback} from 'react'
 import {apiMy} from './components/api'
 import Loading from './components/Loading'
+import moment from 'moment'
+import {getFinalPrice, fromEther} from './web3'
 
 function App() {
-	const [weapons, setWeapons] = useState([{weaponId:23424, price:0.5}]);
+	const [weapons, setWeapons] = useState();
 
 	const loadDB = useCallback(async () => {
-		setWeapons(await apiMy('weapons'))
+		let weapons = await apiMy('weapons')
+		// weapons.sort((a,b) => b.powerPerPrice - a.powerPerPrice)
+		// for (let i = 0; i < weapons.length; i++) {
+		// 	if(i > 20) break
+
+		// 	let realPrice = parseFloat(fromEther(await getFinalPrice(weapons[i].weaponId)))
+
+		// 	if(weapons[i].price !== realPrice) {
+		// 		console.log(weapons[i].price, realPrice)
+		// 		weapons[i].price = realPrice
+		// 		weapons[i].powerPerPrice = weapons[i].power / weapons[i].price
+		// 		apiMy('update_price', {weaponId: weapons[i].weaponId, price: weapons[i].price})
+		// 	}
+		// }
+		setWeapons(weapons)
 	}, [])
 
 	useEffect(() => {
@@ -15,7 +31,12 @@ function App() {
 	}, [loadDB]);
 
 	async function readWeapons() {
-		await apiMy('loadWeapons')
+		await apiMy('load_weapons')
+		loadDB()
+	}
+
+	async function readWeaponsBSC() {
+		await apiMy('weapons_bsc')
 		loadDB()
 	}
 
@@ -26,16 +47,44 @@ function App() {
 				<button type='button' className="btn btn-primary" onClick={readWeapons}>
 					Load from CB market
 				</button>
-				<div className="card p-3">
-					<ul className="list-group list-group-flush">
-					{weapons.map(w => (
-					<div>
-						<h1>{w.weaponId}</h1>
-						<span>{w.price}</span>
-					</div>
-					))}
-					</ul>
-				</div>
+				<button type='button' className="btn btn-primary" onClick={readWeaponsBSC}>
+					Load from BSC
+				</button>
+			</div>
+
+			<div className="row">
+				{weapons && (
+					<table className='table'>
+						<thead>
+							<tr>
+								<td>ID</td>
+								<td>Weapon</td>
+								<td>Stat 1</td>
+								<td>Stat 2</td>
+								<td>Stat 3</td>
+								<td>Power</td>
+								<td>Price</td>
+								<td>Power/Price</td>
+								<td></td>
+							</tr>
+						</thead>
+						<tbody>
+							{weapons?.map((w, index) => (
+								<tr key={index}>
+									<td>{w.weaponId}</td>
+									<td>{w.weaponStars}* {w.weaponElement}</td>
+									<td>{w.stat1Value} {w.stat1Element}</td>
+									<td>{w.stat2Value} {w.stat2Element}</td>
+									<td>{w.stat3Value} {w.stat3Element}</td>
+									<td>{w.power.toFixed(2)}</td>
+									<td>{w.price.toFixed(2)}</td>
+									<td>{w.powerPerPrice.toFixed(2)}</td>
+									<td>{w.sellerAddress} {w.weaponId} {w.price * 1000000000000000000}</td>
+								</tr>
+							))}			
+						</tbody>
+					</table>
+				)}
 			</div>
 		</main>
 		<Loading />

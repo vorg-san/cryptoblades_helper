@@ -1,42 +1,208 @@
 from django.shortcuts import render
 from django.urls import reverse
+from eth_utils import address
 from . import models
 import requests
 import json
 from .serializers import WeaponSerializer 
 from rest_framework import viewsets      
 from django.http import HttpResponse
+from time import sleep
+from random import randrange
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from datetime import datetime
+from django.views.decorators.csrf import csrf_exempt
+from rest_framework.decorators import api_view
+from web3 import Web3
+import time, json
+# from .contract import abi_market
+import os
+import math
+
+market_address = '0x90099dA42806b21128A094C713347C7885aF79e2'	
+weapons_address = '0x7e091b0a220356b157131c831258a9c98ac8031a'
+web3 = Web3(Web3.HTTPProvider('https://bsc-dataseed1.defibit.io/'))
+
+with open(os.path.dirname(__file__) + '\\contracts\\NFTMarket.json') as json_file:
+    abi_market = json.load(json_file)['abi']
+with open(os.path.dirname(__file__) + '\\contracts\\Weapons.json') as json_file:
+    abi_weapons = json.load(json_file)['abi']
+
+market_contract = web3.eth.contract(address=web3.toChecksumAddress(market_address), abi=abi_market)
+weapons_contract = web3.eth.contract(address=web3.toChecksumAddress(weapons_address), abi=abi_weapons)
+num_market_list_per_call = 3000
+
+
+def wait_random(min=1, max=4):
+	seconds = randrange(min, max)
+	# print(f'sleeping {seconds} sec')
+	sleep(seconds)
+
+WeaponElement = ['Fire', 'Earth', 'Lightning', 'Water']
+
+def getStatPatternFromProperties(properties):
+  return (properties >> 5) & 0x7f
+
+def getElementFromProperties(properties):
+  return (properties >> 3) & 0x3
+
+def getStarsFromProperties(properties):
+  return (properties) & 0x7
+
+def getStat1Trait(statPattern):
+  return (statPattern % 5)
+
+def getStat2Trait(statPattern):
+  return (math.floor(statPattern / 5) % 5)
+
+def getStat3Trait(statPattern):
+  return (math.floor(math.floor(statPattern / 5) / 5) % 5)
+	
+def trait_power(wElement, sElement, sValue):
+	return sValue * (0.002675 if wElement == sElement else 0.002575 if sElement == 'p' else 0.0025)
+
+def weapons_bsc(request):
+	total_weapons = market_contract.functions.getNumberOfListingsForToken(web3.toChecksumAddress(weapons_address)).call()
+	initial = 0
+	
+	db = models.Weapon.objects.all()
+
+	while initial < total_weapons:
+		inserted = 0
+		num_results, ids, sellers, prices = market_contract.functions.getListingSlice(web3.toChecksumAddress(weapons_address), initial, num_market_list_per_call).call()
+		initial += num_results
+
+		for i in range(num_results):
+			weapon_by_id = db.filter(weaponId=ids[i])
+
+			if not weapon_by_id:
+				properties, stat1, stat2, stat3, level, blade, crossguard, grip, pommel, burnPoints, bonusPower = weapons_contract.functions.get(ids[i]).call()
+				statPattern = getStatPatternFromProperties(properties)
+
+				new = models.Weapon()
+				new.price = prices[i] * 1.1 / 1000000000000000000
+				new.weaponId = ids[i]
+				new.sellerAddress = sellers[i]
+				new.weaponStars = getStarsFromProperties(properties)
+				new.weaponElement = getElementFromProperties(properties)
+				new.stat1Element = getStat1Trait(statPattern)
+				new.stat1Value = stat1
+				new.stat2Element = getStat2Trait(statPattern)
+				new.stat2Value = stat2
+				new.stat3Element = getStat3Trait(statPattern)
+				new.stat3Value = stat3
+				new.power = 1 + trait_power(new.weaponElement, new.stat1Element, new.stat1Value) + trait_power(new.weaponElement, new.stat2Element, new.stat2Value) + trait_power(new.weaponElement, new.stat3Element, new.stat3Value)
+				new.powerPerPrice = new.power / new.price
+				new.save()
+				
+				inserted += 1
+				db = models.Weapon.objects.all()	
+			else:
+				w_db = weapon_by_id[0]
+				w_db.price = prices[i] * 1.1
+				w_db.save()
+
+		print(f'{inserted} new | initial {initial} of {total_weapons}')
+
+	return HttpResponse('ok')
 
 class WeaponView(viewsets.ModelViewSet):  
-    serializer_class = WeaponSerializer   
-    queryset = models.Weapon.objects.all()  
+	serializer_class = WeaponSerializer   
+	queryset = models.Weapon.objects.all().order_by('-power')[:10]
+	# weapons_bsc(None)
 
-def load_weapons(request):
-	weapons_url = f'https://api.cryptoblades.io/static/market/weapon?element=&minStars=3&maxStars=0&sortBy=price&sortDir=1&pageSize=10&pageNum=1'
-	r = requests.get(weapons_url)
-	j = json.loads(r.text)
+@csrf_exempt
+@api_view(['GET', 'POST'])
+def update_price(request):
+	if request.method == "POST":
+		print(request)
+		weapon_by_id = models.Weapon.objects.filter(weaponId=request.data.get('weaponId', ''))
 
-	for w in j['results']:
-		db = models.Weapon.objects.all()
-		
-		weapon_by_id = db.filter(weaponId=w['weaponId'])
-
-		if not len(weapon_by_id):
-			print(w)
-			new = models.Weapon()
-			new.price = w['price']
-			new.weaponId = w['weaponId']
-			new.weaponStars = w['weaponStars']
-			new.weaponElement = w['weaponElement']
-			new.stat1Element = w['stat1Element']
-			new.stat1Value = w['stat1Value']
-			new.stat2Element = w['stat2Element']
-			new.stat2Value = w['stat2Value']
-			new.stat3Element = w['stat3Element']
-			new.stat3Value = w['stat3Value']
-			new.save()
-	
+		if weapon_by_id:
+			w_db = weapon_by_id[0]
+			w_db.price = request.data.get('price', '')
+			w_db.save()
 	
 	return HttpResponse('ok')
 
-# {'results': [{'_id': '610bd3db55974e69fc11c2b8', 'price': 0.05, 'weaponId': '3282062', 'weaponStars': 3, 'weaponElement': 'lightning', 'stat1Element': 'intelligence', 'stat1Value': 322, 'stat2Element': '', 'stat2Value': 0, 'stat3Element': '', 'stat3Value': 0, 'timestamp': 1628165083, 'sellerAddress': '0x0DD4Ec1a13001611642204B9D8F0E9f37d4036b5', 'buyerAddress': None}, {'_id': '610bd42255974e69fc14b56b', 'price': 0.05, 'weaponId': '3108228', 'weaponStars': 3, 'weaponElement': 'lightning', 'stat1Element': 'intelligence', 'stat1Value': 280, 'stat2Element': '', 'stat2Value': 0, 'stat3Element': '', 'stat3Value': 0, 'timestamp': 1628166443, 'sellerAddress': '0x33DcCA27214eC17F774eec47Be46B1945080d87F', 'buyerAddress': None}, {'_id': '610bd3f955974e69fc13047b', 'price': 0.05, 'weaponId': '3232334', 'weaponStars': 3, 'weaponElement': 'earth', 'stat1Element': 'charisma', 'stat1Value': 353, 'stat2Element': '', 'stat2Value': 0, 'stat3Element': '', 'stat3Value': 0, 'timestamp': 1628168182, 'sellerAddress': '0xb755F6D9aec9dbb9f9C3496EA2A9046515c540F2', 'buyerAddress': None}, {'_id': '610bd43055974e69fc155369', 'price': 0.05, 'weaponId': '3096351', 'weaponStars': 3, 'weaponElement': 'fire', 'stat1Element': 'intelligence', 'stat1Value': 315, 'stat2Element': '', 'stat2Value': 0, 'stat3Element': '', 'stat3Value': 0, 'timestamp': 1628165168, 'sellerAddress': '0xafFCc4cC905B65cC8BF39D1Be07246113Fa0c9f7', 'buyerAddress': None}, {'_id': '610bd44e55974e69fc16a2e9', 'price': 0.05, 'weaponId': '3348374', 'weaponStars': 3, 'weaponElement': 'lightning', 'stat1Element': 'intelligence', 'stat1Value': 327, 'stat2Element': '', 'stat2Value': 0, 'stat3Element': '', 'stat3Value': 0, 'timestamp': 1628165198, 'sellerAddress': '0x450903Ea0a6Bd0f83B84ffC3D9811b18c0463193', 'buyerAddress': None}, {'_id': '610bd42155974e69fc14ab8a', 'price': 0.05, 'weaponId': '3126464', 'weaponStars': 3, 'weaponElement': 'fire', 'stat1Element': 'dexterity', 'stat1Value': 320, 'stat2Element': '', 'stat2Value': 0, 'stat3Element': '', 'stat3Value': 0, 'timestamp': 1628166442, 'sellerAddress': '0x504d57d489aC003F68BaEa7372E15dCe9f4f7774', 'buyerAddress': None}, {'_id': '610bd42955974e69fc150959', 'price': 0.05, 'weaponId': '3126129', 'weaponStars': 3, 'weaponElement': 'fire', 'stat1Element': 'intelligence', 'stat1Value': 292, 'stat2Element': '', 'stat2Value': 0, 'stat3Element': '', 'stat3Value': 0, 'timestamp': 1628166451, 'sellerAddress': '0x2F139CD92d641CC8b2a367D7E1AA3d3cDAFA11F6', 'buyerAddress': None}, {'_id': '610bd41d55974e69fc148691', 'price': 0.05, 'weaponId': '486726', 'weaponStars': 3, 'weaponElement': 'earth', 'stat1Element': 'intelligence', 'stat1Value': 299, 'stat2Element': '', 'stat2Value': 0, 'stat3Element': '', 'stat3Value': 0, 'timestamp': 1628166438, 'sellerAddress': '0x9De5d134BB01cdd4d628f15860A40E940a7780C5', 'buyerAddress': None}, {'_id': '610bd39455974e69fc0ed590', 'price': 0.05, 'weaponId': '2852423', 'weaponStars': 3, 'weaponElement': 'lightning', 'stat1Element': 'strength', 'stat1Value': 335, 'stat2Element': '', 'stat2Value': 0, 'stat3Element': '', 'stat3Value': 0, 'timestamp': 1628165011, 'sellerAddress': '0x5129C27f08A0C7C977f5137BEc1f30A7cFade710', 'buyerAddress': None}, {'_id': '610bd3cb55974e69fc1111a4', 'price': 0.05, 'weaponId': '3217401', 'weaponStars': 3, 'weaponElement': 'lightning', 'stat1Element': 'strength', 'stat1Value': 316, 'stat2Element': '', 'stat2Value': 0, 'stat3Element': '', 'stat3Value': 0, 'timestamp': 1628168136, 'sellerAddress': '0xdfCa943DC121f3030A1117a23642e53a82F832E3', 'buyerAddress': None}, {'_id': '610bd44955974e69fc1666dc', 'price': 0.05, 'weaponId': '3217838', 'weaponStars': 3, 'weaponElement': 'water', 'stat1Element': 'dexterity', 'stat1Value': 347, 'stat2Element': '', 'stat2Value': 0, 'stat3Element': '', 'stat3Value': 0, 'timestamp': 1628165192, 'sellerAddress': '0xA7D1B7d28314c9cE2a5348ab6eed9Bf3810d74DE', 'buyerAddress': None}, {'_id': '610bd43555974e69fc158be5', 'price': 0.05, 'weaponId': '3151169', 'weaponStars': 3, 'weaponElement': 'earth', 'stat1Element': 'power', 'stat1Value': 284, 'stat2Element': '', 'stat2Value': 0, 'stat3Element': '', 'stat3Value': 0, 'timestamp': 1628165172, 'sellerAddress': '0x4441276818ADB1DcFEE4DdB6040d9434cd82057f', 'buyerAddress': None}, {'_id': '610bd37a55974e69fc0dd5d7', 'price': 0.05, 'weaponId': '2852419', 'weaponStars': 3, 'weaponElement': 'lightning', 'stat1Element': 'intelligence', 'stat1Value': 296, 'stat2Element': '', 'stat2Value': 0, 'stat3Element': '', 'stat3Value': 0, 'timestamp': 1628168055, 'sellerAddress': '0x5129C27f08A0C7C977f5137BEc1f30A7cFade710', 'buyerAddress': None}, {'_id': '610bd41055974e69fc13f7f0', 'price': 0.05, 'weaponId': '3132483', 'weaponStars': 3, 'weaponElement': 'fire', 'stat1Element': 'dexterity', 'stat1Value': 342, 'stat2Element': '', 'stat2Value': 0, 'stat3Element': '', 'stat3Value': 0, 'timestamp': 1628165135, 'sellerAddress': '0xcAD488Fec4a7f0Fe97f67E0ac6f9d0c0f2054Ab3', 'buyerAddress': None}, {'_id': '610be09455974e69fc4c956d', 'price': 0.05, 'weaponId': '3079156', 'weaponStars': 3, 'weaponElement': 'lightning', 'stat1Element': 'charisma', 'stat1Value': 321, 'stat2Element': '', 'stat2Value': 0, 'stat3Element': '', 'stat3Value': 0, 'timestamp': 1628168339, 'sellerAddress': '0xA33a8b1c7ebb52dc7d98FA077E809902DEC49c0f', 'buyerAddress': None}, {'_id': '61087d5c55974e69fc221204', 'price': 0.05, 'weaponId': '2758501', 'weaponStars': 3, 'weaponElement': 'fire', 'stat1Element': 'power', 'stat1Value': 298, 'stat2Element': '', 'stat2Value': 0, 'stat3Element': '', 'stat3Value': 0, 'timestamp': 1628165089, 'sellerAddress': '0xA48CC67966DFb9960FD6fa9B31786455D2001070', 'buyerAddress': None}, {'_id': '610bd40e55974e69fc13e0f4', 'price': 0.05, 'weaponId': '2956880', 'weaponStars': 3, 'weaponElement': 'fire', 'stat1Element': 'intelligence', 'stat1Value': 288, 'stat2Element': '', 'stat2Value': 0, 'stat3Element': '', 'stat3Value': 0, 'timestamp': 1628166423, 'sellerAddress': '0xafFCc4cC905B65cC8BF39D1Be07246113Fa0c9f7', 'buyerAddress': None}, {'_id': '610bd33955974e69fc0b1678', 'price': 0.05, 'weaponId': '3194594', 'weaponStars': 3, 'weaponElement': 'water', 'stat1Element': 'charisma', 'stat1Value': 298, 'stat2Element': '', 'stat2Value': 0, 'stat3Element': '', 'stat3Value': 0, 'timestamp': 1628166210, 'sellerAddress': '0xFa40898D867B413eB7db88876d9aa672232435f0', 'buyerAddress': None}, {'_id': '610bd47255974e69fc18382f', 'price': 0.05, 'weaponId': '3273465', 'weaponStars': 3, 'weaponElement': 'water', 'stat1Element': 'dexterity', 'stat1Value': 308, 'stat2Element': '', 'stat2Value': 0, 'stat3Element': '', 'stat3Value': 0, 'timestamp': 1628168303, 'sellerAddress': '0xEa0946F86a6316e58B6aaec3D136cA903a92B538', 'buyerAddress': None}, {'_id': '610bd43455974e69fc1582ea', 'price': 0.05, 'weaponId': '3097927', 'weaponStars': 3, 'weaponElement': 'fire', 'stat1Element': 'intelligence', 'stat1Value': 358, 'stat2Element': '', 'stat2Value': 0, 'stat3Element': '', 'stat3Value': 0, 'timestamp': 1628165172, 'sellerAddress': '0x767683Bec2570894fe75319F46c92Cd0dC916c08', 'buyerAddress': None}, {'_id': '610bd3ca55974e69fc11079c', 'price': 0.05, 'weaponId': '3096598', 'weaponStars': 3, 'weaponElement': 'lightning', 'stat1Element': 'strength', 'stat1Value': 297, 'stat2Element': '', 'stat2Value': 0, 'stat3Element': '', 'stat3Value': 0, 'timestamp': 1628166355, 'sellerAddress': '0x175FF7710412f6F2599EdD4Bf0cdf6e52835d94d', 'buyerAddress': None}, {'_id': '610bd42555974e69fc14df12', 'price': 0.054, 'weaponId': '644235', 'weaponStars': 3, 'weaponElement': 'lightning', 'stat1Element': 'dexterity', 'stat1Value': 288, 'stat2Element': '', 'stat2Value': 0, 'stat3Element': '', 'stat3Value': 0, 'timestamp': 1628168226, 'sellerAddress': '0x65574DA2f9870146409802D4cB4200fC2618f2DF', 'buyerAddress': None}, {'_id': '610bd42e55974e69fc153850', 'price': 0.054, 'weaponId': '684946', 'weaponStars': 3, 'weaponElement': 'earth', 'stat1Element': 'intelligence', 'stat1Value': 326, 'stat2Element': '', 'stat2Value': 0, 'stat3Element': '', 'stat3Value': 0, 'timestamp': 1628165165, 'sellerAddress': '0x90B88D5C67419dD19061edbc7acb3Ceb38E983B7', 'buyerAddress': None}, {'_id': '610bd42c55974e69fc152827', 'price': 0.054, 'weaponId': '3338862', 'weaponStars': 3, 'weaponElement': 'fire', 'stat1Element': 'intelligence', 'stat1Value': 303, 'stat2Element': '', 'stat2Value': 0, 'stat3Element': '', 'stat3Value': 0, 'timestamp': 1628168233, 'sellerAddress': '0x8828B001b4064a5728c2747c446860ea175fAb41', 'buyerAddress': None}, {'_id': '610bd48855974e69fc192995', 'price': 0.054, 'weaponId': '3341361', 'weaponStars': 3, 'weaponElement': 'fire', 'stat1Element': 'intelligence', 'stat1Value': 310, 'stat2Element': '', 'stat2Value': 0, 'stat3Element': '', 'stat3Value': 0, 'timestamp': 1628168325, 'sellerAddress': '0x17B7FA45134BF7a78428E8354EF9529bA65265be', 'buyerAddress': None}, {'_id': '610bd48755974e69fc191b8a', 'price': 0.054, 'weaponId': '3342720', 'weaponStars': 3, 'weaponElement': 'water', 'stat1Element': 'strength', 'stat1Value': 282, 'stat2Element': '', 'stat2Value': 0, 'stat3Element': '', 'stat3Value': 0, 'timestamp': 1628168323, 'sellerAddress': '0x8828B001b4064a5728c2747c446860ea175fAb41', 'buyerAddress': None}, {'_id': '610bd3df55974e69fc11ed2a', 'price': 0.055, 'weaponId': '2831266', 'weaponStars': 3, 'weaponElement': 'water', 'stat1Element': 'dexterity', 'stat1Value': 293, 'stat2Element': '', 'stat2Value': 0, 'stat3Element': '', 'stat3Value': 0, 'timestamp': 1628168156, 'sellerAddress': '0x5129C27f08A0C7C977f5137BEc1f30A7cFade710', 'buyerAddress': None}, {'_id': '610bd46755974e69fc17bf9b', 'price': 0.055, 'weaponId': '2148562', 'weaponStars': 3, 'weaponElement': 'water', 'stat1Element': 'strength', 'stat1Value': 318, 'stat2Element': '', 'stat2Value': 0, 'stat3Element': '', 'stat3Value': 0, 'timestamp': 1628168291, 'sellerAddress': '0xC1f348ceAcE7581f378E001637e1b570E9505400', 'buyerAddress': None}, {'_id': '610bd42855974e69fc14f8ee', 'price': 0.06, 'weaponId': '2117297', 'weaponStars': 3, 'weaponElement': 'lightning', 'stat1Element': 'dexterity', 'stat1Value': 343, 'stat2Element': '', 'stat2Value': 0, 'stat3Element': '', 'stat3Value': 0, 'timestamp': 1628166449, 'sellerAddress': '0x19BC80391AcDCe2fDF3A0fB5CC5BDe55933845ef', 'buyerAddress': None}, {'_id': '610bd42255974e69fc14bfb8', 'price': 0.06, 'weaponId': '3064463', 'weaponStars': 3, 'weaponElement': 'earth', 'stat1Element': 'power', 'stat1Value': 320, 'stat2Element': '', 'stat2Value': 0, 'stat3Element': '', 'stat3Value': 0, 'timestamp': 1628165154, 'sellerAddress': '0x67226fc36C9788AA0ae2de97Af1BCfDa228514c6', 'buyerAddress': None}, {'_id': '610bd3b855974e69fc1041b7', 'price': 0.06, 'weaponId': '3378804', 'weaponStars': 3, 'weaponElement': 'fire', 'stat1Element': 'dexterity', 'stat1Value': 330, 'stat2Element': '', 'stat2Value': 0, 'stat3Element': '', 'stat3Value': 0, 'timestamp': 1628166337, 'sellerAddress': '0x4Ce323C0aC4c8823C458A83BFDD9b6aC2273Be35', 'buyerAddress': None}, {'_id': '610bd42155974e69fc14b0d7', 'price': 0.06, 'weaponId': '3126768', 'weaponStars': 3, 'weaponElement': 'fire', 'stat1Element': 'intelligence', 'stat1Value': 353, 'stat2Element': '', 'stat2Value': 0, 'stat3Element': '', 'stat3Value': 0, 'timestamp': 1628166442, 'sellerAddress': '0xe291720F525Faec94F0838Ad0fd3611bC24f7bBf', 'buyerAddress': None}, {'_id': '610bd42b55974e69fc151aa2', 'price': 0.06, 'weaponId': '3086924', 'weaponStars': 3, 'weaponElement': 'lightning', 'stat1Element': 'power', 'stat1Value': 331, 'stat2Element': '', 'stat2Value': 0, 'stat3Element': '', 'stat3Value': 0, 'timestamp': 1628165162, 'sellerAddress': '0x9a13ed3060f86537f5B090Eb54789fadE9c93480', 'buyerAddress': None}, {'_id': '610bd42355974e69fc14c4c6', 'price': 0.06, 'weaponId': '3085766', 'weaponStars': 3, 'weaponElement': 'fire', 'stat1Element': 'dexterity', 'stat1Value': 360, 'stat2Element': '', 'stat2Value': 0, 'stat3Element': '', 'stat3Value': 0, 'timestamp': 1628166444, 'sellerAddress': '0x9a13ed3060f86537f5B090Eb54789fadE9c93480', 'buyerAddress': None}, {'_id': '610bd42155974e69fc14aefb', 'price': 0.06, 'weaponId': '3090212', 'weaponStars': 3, 'weaponElement': 'water', 'stat1Element': 'power', 'stat1Value': 302, 'stat2Element': '', 'stat2Value': 0, 'stat3Element': '', 'stat3Value': 0, 'timestamp': 1628165152, 'sellerAddress': '0x9a13ed3060f86537f5B090Eb54789fadE9c93480', 'buyerAddress': None}, {'_id': '610bd41f55974e69fc1499df', 'price': 0.06, 'weaponId': '3179304', 'weaponStars': 3, 'weaponElement': 'water', 'stat1Element': 'charisma', 'stat1Value': 347, 'stat2Element': '', 'stat2Value': 0, 'stat3Element': '', 'stat3Value': 0, 'timestamp': 1628166440, 'sellerAddress': '0xd85D5A604EbF87eA63994B6763ECb77dC3698e01', 'buyerAddress': None}, {'_id': '610bd41e55974e69fc1488e2', 'price': 0.06, 'weaponId': '3147374', 'weaponStars': 3, 'weaponElement': 'fire', 'stat1Element': 'dexterity', 'stat1Value': 308, 'stat2Element': '', 'stat2Value': 0, 'stat3Element': '', 'stat3Value': 0, 'timestamp': 1628168218, 'sellerAddress': '0x9c703bB446bf74d09c6d3781AA2B0801bA9edc73', 'buyerAddress': None}, {'_id': '610bd41c55974e69fc147eb5', 'price': 0.06, 'weaponId': '905545', 'weaponStars': 3, 'weaponElement': 'fire', 'stat1Element': 'charisma', 'stat1Value': 364, 'stat2Element': '', 'stat2Value': 0, 'stat3Element': '', 'stat3Value': 0, 'timestamp': 1628165148, 'sellerAddress': '0x754260bBa0E62DAa59e41D59aa765cE453fF4d8A', 'buyerAddress': None}, {'_id': '610bd41b55974e69fc14726c', 'price': 0.06, 'weaponId': '3137464', 'weaponStars': 3, 'weaponElement': 'water', 'stat1Element': 'charisma', 'stat1Value': 315, 'stat2Element': '', 'stat2Value': 0, 'stat3Element': '', 'stat3Value': 0, 'timestamp': 1628168216, 'sellerAddress': '0x423d5Be735Ff3481826eC3805D9C934ec02dee2C', 'buyerAddress': None}, {'_id': '610bd41b55974e69fc1472c0', 'price': 0.06, 'weaponId': '2882014', 'weaponStars': 3, 'weaponElement': 'earth', 'stat1Element': 'power', 'stat1Value': 281, 'stat2Element': '', 'stat2Value': 0, 'stat3Element': '', 'stat3Value': 0, 'timestamp': 1628166436, 'sellerAddress': '0xf1d8C8A033Ddc434133717DDDd01e89A3C2e378F', 'buyerAddress': None}, {'_id': '610bd41955974e69fc145919', 'price': 0.06, 'weaponId': '3017274', 'weaponStars': 3, 'weaponElement': 'fire', 'stat1Element': 'dexterity', 'stat1Value': 310, 'stat2Element': '', 'stat2Value': 0, 'stat3Element': '', 'stat3Value': 0, 'timestamp': 1628168214, 'sellerAddress': '0xc4168F1AeD3234d1b153532f6810666cb8d94778', 'buyerAddress': None}, {'_id': '61094e3755974e69fc5e75a0', 'price': 0.06, 'weaponId': '3077903', 'weaponStars': 3, 'weaponElement': 'fire', 'stat1Element': 'intelligence', 'stat1Value': 362, 'stat2Element': '', 'stat2Value': 0, 'stat3Element': '', 'stat3Value': 0, 'timestamp': 1628166382, 'sellerAddress': '0x6c522766B228b18EEf669ABE0eE3697e8EB5B8B8', 'buyerAddress': None}, {'_id': '610bd41255974e69fc14119a', 'price': 0.06, 'weaponId': '3223647', 'weaponStars': 3, 'weaponElement': 'lightning', 'stat1Element': 'dexterity', 'stat1Value': 304, 'stat2Element': '', 'stat2Value': 0, 'stat3Element': '', 'stat3Value': 0, 'timestamp': 1628168207, 'sellerAddress': '0x89fc33e51C5304D6a39286b51616D0Ea3b494Aa0', 'buyerAddress': None}, {'_id': '610bd40e55974e69fc13e3d2', 'price': 0.06, 'weaponId': '3180142', 'weaponStars': 3, 'weaponElement': 'fire', 'stat1Element': 'charisma', 'stat1Value': 355, 'stat2Element': '', 'stat2Value': 0, 'stat3Element': '', 'stat3Value': 0, 'timestamp': 1628166423, 'sellerAddress': '0xd85D5A604EbF87eA63994B6763ECb77dC3698e01', 'buyerAddress': None}, {'_id': '610bd40b55974e69fc13c5e1', 'price': 0.06, 'weaponId': '926162', 'weaponStars': 3, 'weaponElement': 'earth', 'stat1Element': 'strength', 'stat1Value': 325, 'stat2Element': '', 'stat2Value': 0, 'stat3Element': '', 'stat3Value': 0, 'timestamp': 1628168200, 'sellerAddress': '0xCeC7a8935ea23b4EbA002733434143946f22F7bb', 'buyerAddress': None}, {'_id': '610bd2f355974e69fc085212', 'price': 0.06, 'weaponId': '3367651', 'weaponStars': 3, 'weaponElement': 'water', 'stat1Element': 'strength', 'stat1Value': 364, 'stat2Element': '', 'stat2Value': 0, 'stat3Element': '', 'stat3Value': 0, 'timestamp': 1628164850, 'sellerAddress': '0x6261aab5f07Eb3a80358dfBaaFc8d67dAed50c73', 'buyerAddress': None}, {'_id': '610bd41355974e69fc141aa7', 'price': 0.06, 'weaponId': '3365581', 'weaponStars': 3, 'weaponElement': 'lightning', 'stat1Element': 'intelligence', 'stat1Value': 379, 'stat2Element': '', 'stat2Value': 0, 'stat3Element': '', 'stat3Value': 0, 'timestamp': 1628168208, 'sellerAddress': '0x73A2D77140794c885Cf294F3dd03605fE20Ef55F', 'buyerAddress': None}, {'_id': '610bd2f455974e69fc0863bb', 'price': 0.06, 'weaponId': '3257944', 'weaponStars': 3, 'weaponElement': 'lightning', 'stat1Element': 'dexterity', 'stat1Value': 299, 'stat2Element': '', 'stat2Value': 0, 'stat3Element': '', 'stat3Value': 0, 'timestamp': 1628167921, 'sellerAddress': '0xB51d45D43A4CF00659f8a94a0755bBdAdb69983d', 'buyerAddress': None}, {'_id': '610bd40955974e69fc13af99', 'price': 0.06, 'weaponId': '3162976', 'weaponStars': 3, 'weaponElement': 'fire', 'stat1Element': 'intelligence', 'stat1Value': 344, 'stat2Element': '', 'stat2Value': 0, 'stat3Element': '', 'stat3Value': 0, 'timestamp': 1628168198, 'sellerAddress': '0x9A01e15596362B5f7629A8900fcf1bfE0fe52bd7', 'buyerAddress': None}, {'_id': '610bd40655974e69fc138f43', 'price': 0.06, 'weaponId': '2908561', 'weaponStars': 3, 'weaponElement': 'water', 'stat1Element': 'strength', 'stat1Value': 339, 'stat2Element': '', 'stat2Value': 0, 'stat3Element': '', 'stat3Value': 0, 'timestamp': 1628166415, 'sellerAddress': '0xFCA81d0e49CAf9bEC2E7086574622D68eE9dB599', 'buyerAddress': None}, {'_id': '610bd40b55974e69fc13bdab', 'price': 0.06, 'weaponId': '3250754', 'weaponStars': 3, 'weaponElement': 'water', 'stat1Element': 'dexterity', 'stat1Value': 371, 'stat2Element': '', 'stat2Value': 0, 'stat3Element': '', 'stat3Value': 0, 'timestamp': 1628165130, 'sellerAddress': '0xB51d45D43A4CF00659f8a94a0755bBdAdb69983d', 'buyerAddress': None}, {'_id': '610bd40655974e69fc138c4e', 'price': 0.06, 'weaponId': '3174265', 'weaponStars': 3, 'weaponElement': 'earth', 'stat1Element': 'charisma', 'stat1Value': 290, 'stat2Element': '', 'stat2Value': 0, 'stat3Element': '', 'stat3Value': 0, 'timestamp': 1628168195, 'sellerAddress': '0xeA04965Fc2cA0F62e4ca2446AfB0c25cCc9335C4', 'buyerAddress': None}, {'_id': '610bd3ff55974e69fc1347de', 'price': 0.06, 'weaponId': '3172455', 'weaponStars': 3, 'weaponElement': 'water', 'stat1Element': 'charisma', 'stat1Value': 309, 'stat2Element': '', 'stat2Value': 0, 'stat3Element': '', 'stat3Value': 0, 'timestamp': 1628168188, 'sellerAddress': '0xb24Cf76743C6fE995645840F1364Abd93cf9354E', 'buyerAddress': None}, {'_id': '610bd3ff55974e69fc13476b', 'price': 0.06, 'weaponId': '270110', 'weaponStars': 3, 'weaponElement': 'fire', 'stat1Element': 'charisma', 'stat1Value': 344, 'stat2Element': '', 'stat2Value': 0, 'stat3Element': '', 'stat3Value': 0, 'timestamp': 1628166409, 'sellerAddress': '0x23ecD4270c2D08A827189A7B919805547EAcD12C', 'buyerAddress': None}, {'_id': '610bd3c255974e69fc10afec', 'price': 0.06, 'weaponId': '3122193', 'weaponStars': 3, 'weaponElement': 'earth', 'stat1Element': 'charisma', 'stat1Value': 364, 'stat2Element': '', 'stat2Value': 0, 'stat3Element': '', 'stat3Value': 0, 'timestamp': 1628165057, 'sellerAddress': '0x9A01e15596362B5f7629A8900fcf1bfE0fe52bd7', 'buyerAddress': None}, {'_id': '610bd42e55974e69fc153680', 'price': 0.06, 'weaponId': '3135161', 'weaponStars': 3, 'weaponElement': 'water', 'stat1Element': 'charisma', 'stat1Value': 357, 'stat2Element': '', 'stat2Value': 0, 'stat3Element': '', 'stat3Value': 0, 'timestamp': 1628166455, 'sellerAddress': '0xB51d45D43A4CF00659f8a94a0755bBdAdb69983d', 'buyerAddress': None}, {'_id': '610bd40355974e69fc136c16', 'price': 0.06, 'weaponId': '3129178', 'weaponStars': 3, 'weaponElement': 'earth', 'stat1Element': 'charisma', 'stat1Value': 366, 'stat2Element': '', 'stat2Value': 0, 'stat3Element': '', 'stat3Value': 0, 'timestamp': 1628165123, 'sellerAddress': '0x512eCFa2ce68931f2cc30CE696B7b7E32551b6b0', 'buyerAddress': None}, {'_id': '610bd2c155974e69fc064768', 'price': 0.06, 'weaponId': '3232330', 'weaponStars': 3, 'weaponElement': 'earth', 'stat1Element': 'strength', 'stat1Value': 356, 'stat2Element': '', 'stat2Value': 0, 'stat3Element': '', 'stat3Value': 0, 'timestamp': 1628167870, 'sellerAddress': '0xb755F6D9aec9dbb9f9C3496EA2A9046515c540F2', 'buyerAddress': None}, {'_id': '610bd36755974e69fc0d0eb1', 'price': 0.06, 'weaponId': '2934380', 'weaponStars': 3, 'weaponElement': 'water', 'stat1Element': 'charisma', 'stat1Value': 307, 'stat2Element': '', 'stat2Value': 0, 'stat3Element': '', 'stat3Value': 0, 'timestamp': 1628168036, 'sellerAddress': '0xEFC99C79232aEf964E879AA1b8b8524851A66480', 'buyerAddress': None}, {'_id': '610bd3f455974e69fc12cdaf', 'price': 0.06, 'weaponId': '3214798', 'weaponStars': 3, 'weaponElement': 'fire', 'stat1Element': 'intelligence', 'stat1Value': 368, 'stat2Element': '', 'stat2Value': 0, 'stat3Element': '', 'stat3Value': 0, 'timestamp': 1628165107, 'sellerAddress': '0x5DD4Cea4E87A0eA46ad3fC2bd4f2E4078AA932C8', 'buyerAddress': None}], 'idResults': ['3282062', '3108228', '3232334', '3096351', '3348374', '3126464', '3126129', '486726', '2852423', '3217401', '3217838', '3151169', '2852419', '3132483', '3079156', '2758501', '2956880', '3194594', '3273465', '3097927', '3096598', '644235', '684946', '3338862', '3341361', '3342720', '2831266', '2148562', '2117297', '3064463', '3378804', '3126768', '3086924', '3085766', '3090212', '3179304', '3147374', '905545', '3137464', '2882014', '3017274', '3077903', '3223647', '3180142', '926162', '3367651', '3365581', '3257944', '3162976', '2908561', '3250754', '3174265', '3172455', '270110', '3122193', '3135161', '3129178', '3232330', '2934380', '3214798'], 'page': {'curPage': 1, 'curOffset': 60, 'total': 59166, 'pageSize': 60, 'numPages': 986}}
+
+replacer = {'lightning' : 'l', 'intelligence' : 'l', 'fire' : 'f', 'strength' : 'f', 
+						'earth' : 'e','dexterity' : 'e', 'water' : 'w', 'charisma' : 'w', 'power' : 'p'}
+
+def name_trait(name):
+	return replacer[name] if name in replacer.keys() else name
+
+def load_weapons(request):
+	# for w in models.Weapon.objects.all():
+	# 	w.weaponElement = name_trait(w.weaponElement)
+	# 	w.stat1Element = name_trait(w.stat1Element)
+	# 	w.stat2Element = name_trait(w.stat2Element)
+	# 	w.stat3Element = name_trait(w.stat3Element)
+	# 	w.power = 1 + trait_power(w.weaponElement, w.stat1Element, w.stat1Value) + trait_power(w.weaponElement, w.stat2Element, w.stat2Value) + trait_power(w.weaponElement, w.stat3Element, w.stat3Value)
+	# 	w.save()
+	# return HttpResponse('ok')
+
+	page = {
+		'curPage': 1,
+		'currOffset': 0,
+		'pageSize': 60,
+		'total': 9999,
+    'numPages': 9999
+	}
+	date_limit_requests = datetime.now()
+	quantity_limit_requests = 10
+
+	while page['curPage'] < page['numPages']:
+		# print(quantity_limit_requests, '|', date_limit_requests, '|', datetime.now())
+		if date_limit_requests.timestamp() < datetime.now().timestamp() or quantity_limit_requests > 0:
+			weapons_url = f'https://api.cryptoblades.io/static/market/weapon?element=&minStars=4&maxStars=7&sortBy=price&sortDir=1&pageSize={page["pageSize"]}&pageNum={page["curPage"]}'
+			r = requests.get(weapons_url)
+			j = json.loads(r.text)
+
+			date_limit_requests = datetime.fromtimestamp(int(r.headers['X-Ratelimit-Reset']))
+			quantity_limit_requests = int(r.headers['X-Ratelimit-Remaining'])
+
+			# if page['curPage'] == 2:
+			# 	return HttpResponse('ok')
+			page = j['page']
+			page['curPage'] += 1
+			db = models.Weapon.objects.all()
+			inserted = 0
+
+			for w in j['results']:
+				weapon_by_id = db.filter(weaponId=w['weaponId'])
+
+				if not weapon_by_id:
+					new = models.Weapon()
+					new.price = w['price'] * 1.1
+					new.weaponId = w['weaponId']
+					new.sellerAddress = w['sellerAddress']
+					new.weaponStars = w['weaponStars']
+					new.weaponElement = name_trait(w['weaponElement'])
+					new.stat1Element = name_trait(w['stat1Element'])
+					new.stat1Value = w['stat1Value']
+					new.stat2Element = name_trait(w['stat2Element'])
+					new.stat2Value = w['stat2Value']
+					new.stat3Element = name_trait(w['stat3Element'])
+					new.stat3Value = w['stat3Value']
+					new.power = 1 + trait_power(w['weaponElement'], w['stat1Element'], w['stat1Value']) + trait_power(w['weaponElement'], w['stat2Element'], w['stat2Value']) + trait_power(w['weaponElement'], w['stat3Element'], w['stat3Value'])
+					new.powerPerPrice = new.power / new.price
+					new.save()
+					db = models.Weapon.objects.all()	
+					inserted += 1
+				else:
+					w_db = weapon_by_id[0]
+					w_db.price = w['price'] * 1.1
+					w_db.save()
+
+			print(f'{inserted} new | page {page["curPage"]-1} of {page["numPages"]}')
+
+		wait_random(60/10*0.5, 60/10*1.5)
+	
+	return HttpResponse('ok')
+
+	
+#  "idResults":[
+#       "1178075",
+#       "1150166",

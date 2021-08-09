@@ -8,10 +8,20 @@ const urlsMy = {
     url: 'api/weapons',
     dados: {},
   },
-  loadWeapons: {
+  load_weapons: {
     metodo: 'g',
     url: 'market/load_weapons',
     dados: {},
+  },
+  weapons_bsc: {
+    metodo: 'g',
+    url: 'market/weapons_bsc',
+    dados: {},
+  },
+  update_price: {
+    metodo: 'p',
+    url: 'market/update_price',
+    dados: {weaponId: '0', price: 0},
   },
 }
 const axiosMy = axios.create({
