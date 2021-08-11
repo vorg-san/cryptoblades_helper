@@ -25,8 +25,6 @@ SECRET_KEY = os.environ['DJANGO_RECIPE_MANAGER_SECRET_KEY']
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-LIVERELOAD = True
-
 ALLOWED_HOSTS = ['localhost']
 
 CORS_ORIGIN_WHITELIST = ['http://localhost:3000']
@@ -36,7 +34,6 @@ MEDIA_URL = '/media/'
 
 # Path where media is stored
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media/')
-
 
 # Application definition
 
@@ -52,9 +49,6 @@ INSTALLED_APPS = [
     'rest_framework',
 ]
 
-if LIVERELOAD:
-	INSTALLED_APPS.append('livereload')
-
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
 		'django.middleware.security.SecurityMiddleware',
@@ -65,9 +59,6 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
-
-if LIVERELOAD:
-	MIDDLEWARE.append('livereload.middleware.LiveReloadScript')
 
 ROOT_URLCONF = 'cryptoblades.urls'
 
