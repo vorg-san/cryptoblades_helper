@@ -35,6 +35,15 @@ function App() {
 		loadDB()
 	}
 
+	async function cleanWeapons() {
+		await apiMy('clean_weapons')
+		loadDB()
+	}
+
+	async function doFights() {
+		apiMy('do_fights')
+	}
+
 	async function readWeaponsBSC() {
 		await apiMy('weapons_bsc')
 		loadDB()
@@ -49,6 +58,12 @@ function App() {
 				</button>
 				<button type='button' className="btn btn-primary" onClick={readWeaponsBSC}>
 					Load from BSC
+				</button>
+				<button type='button' className="btn btn-primary" onClick={cleanWeapons}>
+					Clean Weapons
+				</button>
+				<button type='button' className="btn btn-primary" onClick={doFights}>
+					Fight!
 				</button>
 			</div>
 

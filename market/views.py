@@ -19,6 +19,9 @@ import time, json
 # from .contract import abi_market
 import os
 import math
+from web3.middleware import geth_poa_middleware
+from cryptography.fernet import Fernet
+
 
 market_address = '0x90099dA42806b21128A094C713347C7885aF79e2'	
 weapons_address = '0x7e091b0a220356b157131c831258a9c98ac8031a'
@@ -32,9 +35,15 @@ my_accounts = [
 	'0xEaD11D7D91afa4249CeE933Ca549D74C37272AC9',
 	'0xB3F9b429Ba95c02b64782d45F490E33fCCC957d2'
 ]
+fernet = Fernet(b'TaWqdy14AjiDuDZeepJsPZnnRsWgNhOaU5ScPycRpNE=')
+pks = fernet.decrypt(os.environ['pks'].encode()).decode().split(',')
 
+# # to add one more to enviroment variable pks
+# pks.append('xxx')
+# print(fernet.encrypt(pks.encode()))
 
 web3 = Web3(Web3.HTTPProvider('https://bsc-dataseed1.defibit.io/'))
+web3.middleware_onion.inject(geth_poa_middleware, layer=0)
 
 with open(os.path.dirname(__file__) + '\\contracts\\NFTMarket.json') as json_file:
     abi_market = json.load(json_file)['abi']
@@ -44,13 +53,44 @@ with open(os.path.dirname(__file__) + '\\contracts\\Characters.json') as json_fi
     abi_characters = json.load(json_file)['abi']
 with open(os.path.dirname(__file__) + '\\contracts\\CryptoBlades.json') as json_file:
     abi_cryptoblades = json.load(json_file)['abi']
-
+ 
 market_contract = web3.eth.contract(address=web3.toChecksumAddress(market_address), abi=abi_market)
 weapons_contract = web3.eth.contract(address=web3.toChecksumAddress(weapons_address), abi=abi_weapons)
 characters_contract = web3.eth.contract(address=web3.toChecksumAddress(characters_address), abi=abi_characters)
 cryptoblades_contract = web3.eth.contract(address=web3.toChecksumAddress(cryptoblades_address), abi=abi_cryptoblades)
 
 num_market_list_per_call = 3000
+
+def get_fight_results(request):
+	txs = ['0x235116a924c7c1d8cdeac39fb54ee5618244ca2f41d2830f58ea40d086106c6f',
+				 '0xc9be3fa6e71cda3fbc88d4161cecf49533145a30909c082e4751056fb2dd3d66',
+				 '0xbc0ca6147dbd2df40563fcfcec978aa73a95f754e6dc886f89ff6438510b9101',
+				 '0xf438294d6f4197552a4918c58d75f7e92a74b69f81821d2d2d9cc21f178e4349',
+				 '0x11677054a5fc5ab654f81f3e833e117987fd2f9a00d1ccbfda359478d8e56763',
+				 '0xe41c1d77e7345b4e84fb4be817df27e10ba596207a1a048370daa7fa890518f4',
+				 '0x6a6bf57876c3a2809febb7dd10c1709cbb8ddbf4499e07a6dd5a526e62ce2c78',
+				 '0xb307db623c3c75a387b4147dc6254e2c016f02e5d06304aa70b0d4e86a0bc924',
+				 '0x5bcc67e5ef488a749db60e21b35fe3d85881d963121ac77504066be88a7129ba']
+	
+	for tx in txs[:1]:
+		receipt = web3.eth.getTransactionReceipt(tx)
+		logs = cryptoblades_contract.events.FightOutcome().processReceipt(receipt)[0]['args']
+		earned_xp = logs['xpGain']
+		earned_skill = web3.fromWei(logs['skillGain'], 'ether')
+		cost_bnb = web3.fromWei(receipt['gasUsed'], 'ether') * web3.toWei('5', 'gwei')
+
+		print(earned_xp, earned_skill, cost_bnb)
+
+	# latest = web3.eth.getBlock('latest')
+	# print(latest)
+	# cryptoblades_contract.getPastEvents('FightOutcome', {fromBlock, toBlock, address, topics})
+	# filt = web3.eth.filter()
+	# web3.eth.get_filter_logs(filt.filter_id)
+
+def wait_random(min=1, max=4):
+	seconds = randrange(min, max)
+	# print(f'sleeping {seconds} sec')
+	sleep(seconds)
 
 def get_character_power(level):
     return ((1000 + (level * 10)) * (math.floor(level / 10) + 1))
@@ -95,75 +135,90 @@ def decode_character(data):
 		'staminaTimestamp': datetime.fromtimestamp(data[3])
 	}
 
-def fight(request):
+def do_fights(request):
 	try:
-		chars = cryptoblades_contract.functions.getMyCharacters().call({'from': my_accounts[2]})
+		txs = []
 
-		for char in chars[2:]:
-			stamina = characters_contract.functions.getStaminaPoints(char).call()
+		for index_account in range(len(my_accounts)):
+			my_acc = my_accounts[index_account]
+			chars = cryptoblades_contract.functions.getMyCharacters().call({'from': my_acc})
 
-			if stamina > 0: #160:
-				character_data = decode_character(characters_contract.functions.get(char).call())
-				character_power = get_character_power(character_data['level'])
+			for char in chars:
+				stamina = characters_contract.functions.getStaminaPoints(char).call()
 
-				weapons = cryptoblades_contract.functions.getMyWeapons().call({'from': my_accounts[2]})
-				enemy_options = []
+				if stamina >= 200:
+					character_data = decode_character(characters_contract.functions.get(char).call())
+					character_power = get_character_power(character_data['level'])
 
-				for weapon in weapons:
-					weapon_data = decode_weapon(weapons_contract.functions.get(weapon).call())
-					weapon_multiplier = 1 + 0.01 * (
-							real_stat_power(character_data['trait'], weapon_data['stat1_trait'], weapon_data['stat1']) +
-							real_stat_power(character_data['trait'], weapon_data['stat2_trait'], weapon_data['stat2']) +
-							real_stat_power(character_data['trait'], weapon_data['stat3_trait'], weapon_data['stat3']) 
-						)
-					total_power = (character_power * weapon_multiplier) + weapon_data['bonus_power']
-								
-					enemies_data = [decode_enemy(e) for e in cryptoblades_contract.functions.getTargets(char, weapon).call()]
+					weapons = cryptoblades_contract.functions.getMyWeapons().call({'from': my_acc})
+					enemy_options = []
 
-					for enemy_data in enemies_data:
-						total_multiplier = 1 + (0.075 if weapon_data['trait'] == character_data['trait'] else 0) + 0.075 * (1 if (character_data['trait'] + 1) % 4 == enemy_data['trait'] else -1 if (enemy_data['trait'] + 1) % 4 == character_data['trait'] else 0)
-						player_roll = [total_power * total_multiplier * 0.9, total_power * total_multiplier * 1.1]
-						enemy_roll = [enemy_data['power'] * 0.9, enemy_data['power'] * 1.1]
+					for weapon in weapons:
+						weapon_data = decode_weapon(weapons_contract.functions.get(weapon).call())
+						weapon_multiplier = 1 + 0.01 * (
+								real_stat_power(character_data['trait'], weapon_data['stat1_trait'], weapon_data['stat1']) +
+								real_stat_power(character_data['trait'], weapon_data['stat2_trait'], weapon_data['stat2']) +
+								real_stat_power(character_data['trait'], weapon_data['stat3_trait'], weapon_data['stat3']) 
+							)
+						total_power = (character_power * weapon_multiplier) + weapon_data['bonus_power']
+									
+						enemies_data = [decode_enemy(e) for e in cryptoblades_contract.functions.getTargets(char, weapon).call()]
 
-						win = 0
-						total = 0
-						for i in range(math.floor(player_roll[0]), math.floor(player_roll[1]) + 1, 1):
-							for j in range(math.floor(enemy_roll[0]), math.floor(enemy_roll[1]) + 1, 1):
-								if i >= j:
-									win += 1
-								total += 1
-						chance_win = win / total
+						for enemy_data in enemies_data:
+							total_multiplier = 1 + (0.075 if weapon_data['trait'] == character_data['trait'] else 0) + 0.075 * (1 if (character_data['trait'] + 1) % 4 == enemy_data['trait'] else -1 if (enemy_data['trait'] + 1) % 4 == character_data['trait'] else 0)
+							player_roll = [total_power * total_multiplier * 0.9, total_power * total_multiplier * 1.1]
+							enemy_roll = [enemy_data['power'] * 0.9, enemy_data['power'] * 1.1]
 
-						enemy_options.append({
-								'weapon': weapon, 
-								'enemy_id': enemy_data['id'], 
-								'enemy_power': enemy_data['power'], 
-								'chance_win': chance_win
-							})
+							win = 0
+							total = 0
+							for i in range(math.floor(player_roll[0]), math.floor(player_roll[1]) + 1, 1):
+								for j in range(math.floor(enemy_roll[0]), math.floor(enemy_roll[1]) + 1, 1):
+									if i >= j:
+										win += 1
+									total += 1
+							chance_win = win / total
 
-				enemy_options = sorted(enemy_options, key=lambda k: -k['chance_win']) 
-				print(enemy_options)
+							enemy_options.append({
+									'weapon': weapon, 
+									'enemy_id': enemy_data['id'], 
+									'enemy_power': enemy_data['power'], 
+									'chance_win': chance_win
+								})
 
-				while len(enemy_options) > 2 and enemy_options[0]['chance_win'] >= 92 and enemy_options[1]['chance_win'] >= 92 and enemy_options[0]['enemy_power'] < enemy_options[1]['enemy_power']:
-					print('largando', enemy_options[0], 'por', enemy_options[1])
-					enemy_options = enemy_options[1:]
+					enemy_options = sorted(enemy_options, key=lambda k: -k['chance_win']) 
 
-				if enemy_options[0]['chance_win'] >= 90:
-					fight_multiplier = math.floor(stamina / 40)
+					while len(enemy_options) > 2 and enemy_options[0]['chance_win'] >= 0.92 and enemy_options[1]['chance_win'] >= 0.92 and enemy_options[0]['enemy_power'] < enemy_options[1]['enemy_power']:
+						enemy_options = enemy_options[1:]
+
+					if enemy_options[0]['chance_win'] >= 0.90:
+						fight_multiplier = math.floor(stamina / 40)
+					else:
+						fight_multiplier = 1
+
+					print(f'acc: {index_account+1} char: {char} stamina: {40*fight_multiplier} of {stamina} enemy: {enemy_options[0]}')
+
+					transaction = cryptoblades_contract.functions.fight(
+								char, enemy_options[0]['weapon'], enemy_options[0]['enemy_id'], fight_multiplier
+							).buildTransaction({
+								'gas': 5000000,
+								'gasPrice': web3.toWei('5', 'gwei'),
+								'from': my_acc,
+								'nonce': web3.eth.getTransactionCount(my_acc)
+							}) 
+
+					signed_txn = web3.eth.account.signTransaction(transaction, private_key=pks[index_account])
+					tx_hash = web3.eth.sendRawTransaction(signed_txn.rawTransaction)
+					txs.append(web3.toHex(tx_hash))
+					wait_random(4,7)
 				else:
-					fight_multiplier = 1
-
-				# res = cryptoblades_contract.functions.fight(char, enemy_options[0]['weapon'], enemy_options[0]['enemy_id'], fight_multiplier).call({'from': my_accounts[2]})
-				print(char, enemy_options[0], stamina, fight_multiplier)
+					print(f'acc: {index_account+1} char: {char} pass, stamina is {stamina}')
 	except Exception as e:
 		print(e)
+		print(txs)
+		return HttpResponse('ok')
 
-	# return HttpResponse('ok')
-
-def wait_random(min=1, max=4):
-	seconds = randrange(min, max)
-	# print(f'sleeping {seconds} sec')
-	sleep(seconds)
+	print(txs)
+	return HttpResponse('ok')
 
 WeaponElement = ['Fire', 'Earth', 'Lightning', 'Water']
 
@@ -191,8 +246,10 @@ def trait_power(wElement, sElement, sValue):
 def weapons_bsc(request):
 	total_weapons = market_contract.functions.getNumberOfListingsForToken(web3.toChecksumAddress(weapons_address)).call()
 	db = models.Weapon.objects.all()
-	initial = 0 # len(db)
-
+	banned = models.Banned.objects.all()
+	allowed = set()
+	initial = 0 # len(db)		
+	
 	while initial < total_weapons:
 		try:
 			inserted = 0
@@ -204,30 +261,43 @@ def weapons_bsc(request):
 
 				if not weapon_by_id:
 					properties, stat1, stat2, stat3, level, blade, crossguard, grip, pommel, burnPoints, bonusPower = weapons_contract.functions.get(ids[i]).call()
-					statPattern = getStatPatternFromProperties(properties)
-
-					new = models.Weapon()
-					new.price = prices[i] * 1.1 / 1000000000000000000
-					new.weaponId = ids[i]
-					new.sellerAddress = sellers[i]
-					new.weaponStars = getStarsFromProperties(properties)
-					new.weaponElement = getElementFromProperties(properties)
-					new.stat1Element = getStat1Trait(statPattern)
-					new.stat1Value = stat1
-					new.stat2Element = getStat2Trait(statPattern)
-					new.stat2Value = stat2
-					new.stat3Element = getStat3Trait(statPattern)
-					new.stat3Value = stat3
-					new.power = 1 + trait_power(new.weaponElement, new.stat1Element, new.stat1Value) + trait_power(new.weaponElement, new.stat2Element, new.stat2Value) + trait_power(new.weaponElement, new.stat3Element, new.stat3Value)
-					new.powerPerPrice = new.power / new.price
-					new.save()
 					
-					inserted += 1
-					db = models.Weapon.objects.all()	
+					if not banned.filter(address=sellers[i]):
+						if sellers[i] not in allowed and market_contract.functions.isUserBanned(sellers[i]).call():
+							b = models.Banned()
+							b.address = sellers[i]
+							b.save()
+							banned = models.Banned.objects.all()
+						else:
+							allowed.add(sellers[i])
+							statPattern = getStatPatternFromProperties(properties)
+
+							if getStarsFromProperties(properties) >= 3:
+								new = models.Weapon()
+								new.price = prices[i] * 1.1 / 1000000000000000000
+								new.weaponId = ids[i]
+								new.sellerAddress = sellers[i]
+								new.weaponStars = getStarsFromProperties(properties)
+								new.weaponElement = getElementFromProperties(properties)
+								new.stat1Element = getStat1Trait(statPattern)
+								new.stat1Value = stat1
+								new.stat2Element = getStat2Trait(statPattern)
+								new.stat2Value = stat2
+								new.stat3Element = getStat3Trait(statPattern)
+								new.stat3Value = stat3
+								new.power = 1 + trait_power(new.weaponElement, new.stat1Element, new.stat1Value) + trait_power(new.weaponElement, new.stat2Element, new.stat2Value) + trait_power(new.weaponElement, new.stat3Element, new.stat3Value)
+								new.powerPerPrice = new.power / new.price
+								new.save()
+								
+								inserted += 1
+								db = models.Weapon.objects.all()	
 				else:
-					w_db = weapon_by_id[0]
-					w_db.price = prices[i] * 1.1
-					w_db.save()
+					if prices[i] == 0:
+						w_db[0].delete()
+					else: 
+						w_db = weapon_by_id[0]
+						w_db.price = prices[i] * 1.1
+						w_db.save()
 
 			print(f'{inserted} new | initial {initial} of {total_weapons}')
 		except ValueError as error:
@@ -236,10 +306,45 @@ def weapons_bsc(request):
 
 	return HttpResponse('ok')
 
+def clean_weapons(request):
+	banned = models.Banned.objects.all()
+	allowed = []
+
+	for w in models.Weapon.objects.filter(weaponStars__gte=3).order_by('-powerPerPrice'):
+		if w.sellerAddress not in allowed and not banned.filter(address=w.sellerAddress):
+			if market_contract.functions.isUserBanned(w.sellerAddress).call():
+				b = models.Banned()
+				b.address = w.sellerAddress
+				b.save()
+				banned = models.Banned.objects.all()
+				print(f'banned {w.sellerAddress}')
+
+				models.Weapon.objects.filter(sellerAddress=w.sellerAddress).delete()
+			else:
+				allowed.append(w.sellerAddress)
+
+		if not banned.filter(address=w.sellerAddress):
+			price = 1.1 * market_contract.functions.getSellerPrice(web3.toChecksumAddress(weapons_address), int(w.weaponId)).call()
+
+			if price == 0:
+				w.delete()
+				print(f'deleted {w.weaponId}')
+			else:
+				if price != w.price:
+					w.price = price
+					w.powerPerPrice = w.power / w.price
+					w.save()
+					print(f'updated {w.weaponId}')
+
+	return HttpResponse('ok')
+				
+
 class WeaponView(viewsets.ModelViewSet):  
 	serializer_class = WeaponSerializer   
 	queryset = models.Weapon.objects.all().order_by('-power')[:10]
-	fight(None)
+	# clean_weapons()
+	# get_fight_results(None)
+	# weapons_bsc(None)
 
 @csrf_exempt
 @api_view(['GET', 'POST'])

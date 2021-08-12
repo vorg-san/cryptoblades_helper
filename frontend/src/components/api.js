@@ -8,9 +8,19 @@ const urlsMy = {
     url: 'api/weapons',
     dados: {},
   },
-  load_weapons: {
+  do_fights: {
+    metodo: 'g',
+    url: 'market/do_fights',
+    dados: {},
+  },
+	load_weapons: {
     metodo: 'g',
     url: 'market/load_weapons',
+    dados: {},
+  },
+	clean_weapons: {
+    metodo: 'g',
+    url: 'market/clean_weapons',
     dados: {},
   },
   weapons_bsc: {

@@ -1,5 +1,6 @@
 from django.db import models
 from django.utils import timezone
+from eth_utils import address
 
 class Weapon(models.Model):
 	weaponId = models.CharField(max_length=100)
@@ -16,3 +17,6 @@ class Weapon(models.Model):
 	power = models.FloatField()
 	powerPerPrice = models.FloatField()
 	updated = models.DateTimeField(default=timezone.now, blank=True)
+
+class Banned(models.Model):
+	address = models.CharField(max_length=200)
