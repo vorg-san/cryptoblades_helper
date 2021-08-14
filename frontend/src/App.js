@@ -9,20 +9,7 @@ function App() {
 	const [weapons, setWeapons] = useState();
 
 	const loadDB = useCallback(async () => {
-		let weapons = await apiMy('weapons')
-		// weapons.sort((a,b) => b.powerPerPrice - a.powerPerPrice)
-		// for (let i = 0; i < weapons.length; i++) {
-		// 	if(i > 20) break
-
-		// 	let realPrice = parseFloat(fromEther(await getFinalPrice(weapons[i].weaponId)))
-
-		// 	if(weapons[i].price !== realPrice) {
-		// 		console.log(weapons[i].price, realPrice)
-		// 		weapons[i].price = realPrice
-		// 		weapons[i].powerPerPrice = weapons[i].power / weapons[i].price
-		// 		apiMy('update_price', {weaponId: weapons[i].weaponId, price: weapons[i].price})
-		// 	}
-		// }
+		let weapons = [] //await apiMy('weapons')
 		setWeapons(weapons)
 	}, [])
 
@@ -30,44 +17,42 @@ function App() {
 		loadDB()
 	}, [loadDB]);
 
-	async function readWeapons() {
-		await apiMy('load_weapons')
-		loadDB()
-	}
-
-	async function cleanWeapons() {
-		await apiMy('clean_weapons')
-		loadDB()
+	async function syncMarket() {
+		apiMy('read_market_weapons')
+		apiMy('read_market_chars')
+		// apiMy('clean_weapons')
+		// apiMy('clean_chars')
+		// window.location = '/'
 	}
 
 	async function doFights() {
 		apiMy('do_fights')
 	}
 
-	async function readWeaponsBSC() {
-		await apiMy('weapons_bsc')
-		loadDB()
+	function getIconElement(e) {
+		let elements = ['fire', 'earth', 'lightning', 'water']
+		let name = elements[e] + '-icon'
+		return (
+			<span className={name}></span>
+			)
 	}
 
   return (
 		<>
 		<main className="content">
 			<div className="row">
-				<button type='button' className="btn btn-primary" onClick={readWeapons}>
-					Load from CB market
+			<div className="col-11 offset-1">
+				<button type='button' className="btn btn-primary" onClick={syncMarket}>
+					Sync Market
 				</button>
-				<button type='button' className="btn btn-primary" onClick={readWeaponsBSC}>
-					Load from BSC
-				</button>
-				<button type='button' className="btn btn-primary" onClick={cleanWeapons}>
-					Clean Weapons
-				</button>
-				<button type='button' className="btn btn-primary" onClick={doFights}>
+				<button type='button' className="btn btn-danger" onClick={doFights}>
 					Fight!
 				</button>
 			</div>
+			</div>
 
 			<div className="row">
+			<div className="col-11 offset-1">
 				{weapons && (
 					<table className='table'>
 						<thead>
@@ -87,10 +72,14 @@ function App() {
 							{weapons?.map((w, index) => (
 								<tr key={index}>
 									<td>{w.weaponId}</td>
-									<td>{w.weaponStars}* {w.weaponElement}</td>
-									<td>{w.stat1Value} {w.stat1Element}</td>
-									<td>{w.stat2Value} {w.stat2Element}</td>
-									<td>{w.stat3Value} {w.stat3Element}</td>
+									<td>{w.weaponStars+1}* {getIconElement(w.weaponElement)}</td>
+									<td>{w.stat1Value} {getIconElement(w.stat1Element)}</td>
+									<td>{!!w.stat2Value && (
+										<>{w.stat2Value} {getIconElement(w.stat2Element)}</>
+									)}</td>
+									<td>{!!w.stat3Value && (
+										<>{w.stat3Value} {getIconElement(w.stat3Element)}</>
+									)}</td>
 									<td>{w.power.toFixed(2)}</td>
 									<td>{w.price.toFixed(2)}</td>
 									<td>{w.powerPerPrice.toFixed(2)}</td>
@@ -100,6 +89,7 @@ function App() {
 						</tbody>
 					</table>
 				)}
+			</div>
 			</div>
 		</main>
 		<Loading />

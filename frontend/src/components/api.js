@@ -23,15 +23,20 @@ const urlsMy = {
     url: 'market/clean_weapons',
     dados: {},
   },
-  weapons_bsc: {
+	clean_chars: {
     metodo: 'g',
-    url: 'market/weapons_bsc',
+    url: 'market/clean_chars',
     dados: {},
   },
-  update_price: {
-    metodo: 'p',
-    url: 'market/update_price',
-    dados: {weaponId: '0', price: 0},
+  read_market_weapons: {
+    metodo: 'g',
+    url: 'market/read_market_weapons',
+    dados: {},
+  },
+  read_market_chars: {
+    metodo: 'g',
+    url: 'market/read_market_chars',
+    dados: {},
   },
 }
 const axiosMy = axios.create({
