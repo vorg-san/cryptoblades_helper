@@ -20,9 +20,13 @@ function App() {
 	async function syncMarket() {
 		apiMy('read_market_weapons')
 		apiMy('read_market_chars')
-		// apiMy('clean_weapons')
-		// apiMy('clean_chars')
+		apiMy('clean_weapons')
+		apiMy('clean_chars')
 		// window.location = '/'
+	}
+
+	async function claimRewards() {
+		apiMy('from_game_to_stake')
 	}
 
 	async function doFights() {
@@ -44,6 +48,9 @@ function App() {
 			<div className="col-11 offset-1">
 				<button type='button' className="btn btn-primary" onClick={syncMarket}>
 					Sync Market
+				</button>
+				<button type='button' className="btn btn-primary" onClick={claimRewards}>
+					Stake Rewards
 				</button>
 				<button type='button' className="btn btn-danger" onClick={doFights}>
 					Fight!

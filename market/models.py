@@ -36,3 +36,14 @@ class Character(models.Model):
 
 class Banned(models.Model):
 	address = models.CharField(max_length=200)
+
+class Fight(models.Model):
+	address = models.CharField(max_length=200)
+	character = models.CharField(max_length=100)
+	xp = models.IntegerField()
+	skill_earned = models.FloatField()
+	bnb_cost = models.FloatField()
+	skill_dollar_price = models.FloatField()
+	bnb_dollar_price = models.FloatField()
+	usd_cost = models.FloatField()
+	usd_earned = models.FloatField()

@@ -38,6 +38,11 @@ const urlsMy = {
     url: 'market/read_market_chars',
     dados: {},
   },
+  from_game_to_stake: {
+    metodo: 'g',
+    url: 'market/from_game_to_stake',
+    dados: {},
+  },
 }
 const axiosMy = axios.create({
   baseURL: raizMy,

@@ -5,6 +5,7 @@ from . import views
 app_name = "market"
 urlpatterns = [
 	path("do_fights", views.do_fights),
+	path('from_game_to_stake', views.from_game_to_stake),
 	path('read_market_chars', views.read_market_chars),
 	path('read_market_weapons', views.read_market_weapons),
 	path("clean_weapons", views.clean_weapons),
