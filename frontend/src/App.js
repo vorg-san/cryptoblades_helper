@@ -9,6 +9,7 @@ function App() {
   const [accounts, setAccounts] = useState();
   const [myAccounts, setMyAccounts] = useState();
 	const [numFights, setNumFights] = useState();
+	const [prices, setPrices] = useState();
 
 	function shortAddress(a) {
 		return a.substring(0,6) + '...' + a.substring(a.length - 4, a.length)
@@ -23,9 +24,11 @@ function App() {
 	}
 
 	function get_acc(my_accs, accs, address) {
-		let acc = accs.find(a => a.owner === address)
+		let acc = accs.find(a => a.address === address)
 		if(!acc) {
-			acc = {name: my_accs.find(a => a.address === address)?.name, owner : address, weapons: [], chars: []}
+			acc = JSON.parse(JSON.stringify(my_accs.find(a => a.address === address)))
+			acc.weapons = []
+			acc.chars = []
 			accs.push(acc)
 		}
 		return acc
@@ -43,6 +46,8 @@ function App() {
 	const loadItems = useCallback(async () => {
 		let my_accs = await apiMy('personal_account')
 		let xp_table = await apiMy('experience_table')
+		let price = await apiMy('price')
+		setPrices(price)
 		let accs = []
 
 		let chars = await apiMy("characters")
@@ -227,16 +232,23 @@ function App() {
 												{index === 0 && (
 													<>
 													<td rowSpan={accounts[accIndex].items.length}>{acc.name}</td>
-													<td rowSpan={accounts[accIndex].items.length}>{shortAddress(acc.owner)}</td>
+													<td rowSpan={accounts[accIndex].items.length}>
+														{shortAddress(acc.address)}<br/>
+														{acc.bnb.toFixed(3)} bnb ${(acc.bnb * prices[0]?.value).toFixed(0)}<br/>
+														{acc.skill.toFixed(3)} skill<br/>
+														{acc.skill_staked.toFixed(3)} staked<br/>
+														{acc.skill_in_game.toFixed(3)} in game
+														
+													</td>
 													</>
 												)}
 												<td>
 													{item?.char?.charId} {getIconElement(item?.char?.element)}
 													{item?.char && (
-														<select onChange={e => transferChar(acc.owner, e.target.value, item?.char?.charId)}>
+														<select onChange={e => transferChar(acc.address, e.target.value, item?.char?.charId)}>
 															<option value={''}></option>
 															{myAccounts?.map((acc, index) => (
-																<option value={acc.address}>{acc.name}</option>
+																<option value={acc.address} key={index}>{acc.name}</option>
 															))}
 														</select>
 													)}
@@ -245,17 +257,17 @@ function App() {
 												<td>
 													{item?.char && (
 														<span className={parseInt(item.char.level_reach / 10) - parseInt(item.char.level / 10) >= 1 ? 'green' : ''}>
-															{item.char.level} ({item.char.xp_unclaimed} -> {item.char.level_reach})
+															{item.char.level} ({item.char.level_reach})
 														</span>
 													)}
 												</td>
 												<td>
 													{item?.weapon?.weaponId} {getIconElement(item?.weapon?.weaponElement)}
 													{item?.weapon && (
-														<select onChange={e => transferWeapon(acc.owner, e.target.value, item?.weapon?.weaponId)}>
+														<select onChange={e => transferWeapon(acc.address, e.target.value, item?.weapon?.weaponId)}>
 															<option value={''}></option>
 															{myAccounts?.map((acc, index) => (
-																<option value={acc.address}>{acc.name}</option>
+																<option value={acc.address} key={index}>{acc.name}</option>
 															))}
 														</select>
 													)}

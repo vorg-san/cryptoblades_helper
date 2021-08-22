@@ -43,10 +43,19 @@ class Banned(models.Model):
 class PersonalAccount(models.Model):
 	name = models.CharField(max_length=200)
 	address = models.CharField(max_length=200)
+	bnb = models.FloatField(default=0)
+	skill = models.FloatField(default=0)
+	skill_staked = models.FloatField(default=0)
+	skill_in_game = models.FloatField(default=0)
 
 class XpTable(models.Model):
 	level = models.IntegerField()
 	xp_required = models.IntegerField()
+
+class Price(models.Model):
+	value = models.FloatField()
+	name = models.CharField(max_length=50, default='')
+	updated = models.DateTimeField(default=timezone.now, blank=True)
 
 class Fight(models.Model):
 	address = models.CharField(max_length=200)

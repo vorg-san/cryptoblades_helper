@@ -32,20 +32,21 @@ SKILL_address = '0x154a9f9cbd3449ad22fdae23044319d6ef2a1fab'
 BNB_address = '0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c' 
 BUSD_address = '0xe9e7cea3dedca5984780bafc599bd69add087d56'
 pancake_factory_address = '0xBCfCcbde45cE874adCB698cC183deBcF17952812'
+staking_reward_address = '0xd6b2D8f59Bf30cfE7009fB4fC00a7b13Ca836A2c'
+oracle_address = '0x1cbfa0ec28da66896946474b2a93856eb725fbba'
 
 fernet = Fernet(b'TaWqdy14AjiDuDZeepJsPZnnRsWgNhOaU5ScPycRpNE=')
 pks = fernet.decrypt(os.environ['pks'].encode()).decode().split(',')
 my_accounts = list(models.PersonalAccount.objects.all().values_list('address', flat=True))
 
+# to add one more to account
 # p = models.PersonalAccount()
-# p.name = f'acc 20'
+# p.name = f'acc 21'
 # p.address = ''
 # p.save()
-
-# to add one more to enviroment variable pks  
-# print(len(pks))   
 # pks.append('')
 # print(fernet.encrypt(','.join(pks).encode()))
+# print(len(pks), len(my_accounts))   
 
 web3 = Web3(Web3.HTTPProvider('https://bsc-dataseed1.defibit.io/'))
 web3.middleware_onion.inject(geth_poa_middleware, layer=0)
@@ -64,6 +65,10 @@ with open(os.path.dirname(__file__) + '\\contracts\\PancakePair.json') as json_f
     abi_pancake_pair = json.load(json_file)['abi']
 with open(os.path.dirname(__file__) + '\\contracts\\SkillToken.json') as json_file:
     abi_skill = json.load(json_file)['abi']
+with open(os.path.dirname(__file__) + '\\contracts\\StakingRewards.json') as json_file:
+    abi_staking_rewards = json.load(json_file)['abi']
+with open(os.path.dirname(__file__) + '\\contracts\\BasicPriceOracle.json') as json_file:
+    abi_oracle = json.load(json_file)['abi']
  
 market_contract = web3.eth.contract(address=web3.toChecksumAddress(market_address), abi=abi_market)
 weapons_contract = web3.eth.contract(address=web3.toChecksumAddress(weapons_address), abi=abi_weapons)
@@ -71,6 +76,8 @@ characters_contract = web3.eth.contract(address=web3.toChecksumAddress(character
 cryptoblades_contract = web3.eth.contract(address=web3.toChecksumAddress(cryptoblades_address), abi=abi_cryptoblades)
 pancake_factory_contract = web3.eth.contract(address=web3.toChecksumAddress(pancake_factory_address), abi=abi_pancake_factory)
 skill_contract = web3.eth.contract(address=web3.toChecksumAddress(SKILL_address), abi=abi_skill)
+staking_rewards_contract = web3.eth.contract(address=web3.toChecksumAddress(staking_reward_address), abi=abi_staking_rewards)
+oracle_contract = web3.eth.contract(address=web3.toChecksumAddress(oracle_address), abi=abi_oracle)
 
 num_market_list_per_call = 3000
 
@@ -84,10 +91,33 @@ def get_pair_price_now(addr1, addr2):
 	reserve1, reserve2, _ = pancake_pair_contract.functions.getReserves().call()
 	return reserve2 / reserve1
 
+def update_price(id, value):
+	p = models.Price.objects.filter(pk=id)
+	if p:
+		p[0].value = value
+		p.save()
+	else:
+		p = models.Price()
+		p.value = value
+		p.save()
+
+def update_prices():
+	bnb_usd_price = get_pair_price_now(BNB_address, BUSD_address)
+	skill_usd_price = get_pair_price_now(SKILL_address, BNB_address) * bnb_usd_price
+	oracle_price = 1 / web3.fromWei(oracle_contract.functions.currentPrice().call(), 'ether')
+
+	update_price(1, bnb_usd_price)
+	update_price(2, skill_usd_price)
+	update_price(3, oracle_price)
+# update_prices()
+
 def get_fight_results(txs):	
 	fight_results = []
 	bnb_usd_price = get_pair_price_now(BNB_address, BUSD_address)
 	skill_usd_price = get_pair_price_now(SKILL_address, BNB_address) * bnb_usd_price
+
+	update_price(1, bnb_usd_price)
+	update_price(2, skill_usd_price)
 	
 	for tx in txs:
 		receipt = web3.eth.getTransactionReceipt(tx)
@@ -420,7 +450,7 @@ def trait_power(wElement, sElement, sValue):
 
 def warn_if_interesting(item_name, id, price, power):
 	if item_name == 'weapon':
-		if price < 0.33 or (price < 0.4 and power >= 2.6) or power > 3:
+		if (price < 0.4 and power >= 2.7) or power > 3:
 			print(f'SEE WEAPON {id}: power {power} for {price} skill')
 			winsound.Beep(300, 150)  
 			winsound.Beep(300, 150)  
@@ -485,6 +515,13 @@ def update_my_chars_and_weapons(addresses):
 		if market_contract.functions.isUserBanned(address).call():
 			print(f'BANNED {address}!!!')
 
+		a = models.PersonalAccount.objects.filter(address=address)[0]
+		a.bnb = web3.fromWei(web3.eth.getBalance(web3.toChecksumAddress(address)), 'ether')	
+		a.skill = web3.fromWei(skill_contract.functions.balanceOf(web3.toChecksumAddress(address)).call(), 'ether')
+		a.skill_staked = web3.fromWei(staking_rewards_contract.functions.balanceOf(web3.toChecksumAddress(address)).call(), 'ether')
+		a.skill_in_game = web3.fromWei(cryptoblades_contract.functions.getTokenRewardsFor(web3.toChecksumAddress(address)).call(), 'ether')	
+		a.save()
+
 		models.Weapon.objects.filter(owner=address).delete()
 		weapons = cryptoblades_contract.functions.getMyWeapons().call({'from': address})
 		for weapon in weapons:
@@ -525,6 +562,10 @@ def update_experience_table(request):
 			db.save()
 
 	return HttpResponse('ok')
+
+class PriceView(viewsets.ModelViewSet):  
+	serializer_class = serializers.PriceSerializer
+	queryset = models.Price.objects.all()
 
 class XpTableView(viewsets.ModelViewSet):  
 	serializer_class = serializers.XpTableSerializer
@@ -632,35 +673,38 @@ def clean_market(model, item_name, item_address, item_id):
 	total = 0
 
 	for w in model.objects.exclude(owner__in=my_accounts).order_by('price'):
-		if banned.filter(address=w.seller):
-			model.objects.filter(seller=w.seller).delete()
-			continue
-
-		if w.seller not in allowed:
-			if market_contract.functions.isUserBanned(w.seller).call():
-				b = models.Banned()
-				b.address = w.seller
-				b.save()
-				banned = models.Banned.objects.all()
-				print(f'__ banned {w.seller}')
-
+		try:
+			if banned.filter(address=w.seller):
 				model.objects.filter(seller=w.seller).delete()
 				continue
-			else:
-				allowed.append(w.seller)
 
-		price = 1.1 * float(web3.fromWei(market_contract.functions.getSellerPrice(item_address, int(getattr(w, item_id))).call(), 'ether'))
-		total += 1
-		
-		if price == 0:
-			w.delete()
-			# print(f'deleted {item_name} {int(getattr(w, item_id))}')
-		else:
-			if price != w.price:
-				# print(f'updated {item_name} price from {w.price} to {price} ')
-				w.price = price
-				w.powerPerPrice = w.power / w.price / (500 / w.price if item_name == 'char' else 1)
-				w.save()
+			if w.seller not in allowed:
+				if market_contract.functions.isUserBanned(w.seller).call():
+					b = models.Banned()
+					b.address = w.seller
+					b.save()
+					banned = models.Banned.objects.all()
+					print(f'__ banned {w.seller}')
+
+					model.objects.filter(seller=w.seller).delete()
+					continue
+				else:
+					allowed.append(w.seller)
+
+			price = 1.1 * float(web3.fromWei(market_contract.functions.getSellerPrice(item_address, int(getattr(w, item_id))).call(), 'ether'))
+			total += 1
+			
+			if price == 0:
+				w.delete()
+				# print(f'deleted {item_name} {int(getattr(w, item_id))}')
+			else:
+				if price != w.price:
+					# print(f'updated {item_name} price from {w.price} to {price} ')
+					w.price = price
+					w.powerPerPrice = w.power / w.price / (500 / w.price if item_name == 'char' else 1)
+					w.save()
+		except Exception as e:
+			print("Error: ", e)
 
 	return HttpResponse('ok')
 				

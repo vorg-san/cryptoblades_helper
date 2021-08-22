@@ -20,4 +20,9 @@ class XpTableSerializer(serializers.ModelSerializer):
     class Meta:
         model = models.XpTable
         fields = '__all__'
+
+class PriceSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = models.Price
+        fields = '__all__'
 				

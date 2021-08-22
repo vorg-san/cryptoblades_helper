@@ -23,6 +23,7 @@ router.register(r'weapons', views.WeaponView, 'weapons')
 router.register(r'characters', views.CharacterView, 'characters')  
 router.register(r'personal_account', views.PersonalAccountView, 'personal_account')  
 router.register(r'xp_table', views.XpTableView, 'xp_table')  
+router.register(r'price', views.PriceView, 'price')  
 
 urlpatterns = [
     path("market/", include("market.urls")),

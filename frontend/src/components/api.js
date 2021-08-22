@@ -78,6 +78,11 @@ const urlsMy = {
     url: 'api/xp_table',
     dados: {},
   },
+  price: {
+    metodo: 'g',
+    url: 'api/price',
+    dados: {},
+  },
 }
 const axiosMy = axios.create({
   baseURL: raizMy,
