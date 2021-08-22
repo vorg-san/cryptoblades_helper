@@ -8,10 +8,30 @@ const urlsMy = {
     url: 'api/weapons',
     dados: {},
   },
-  do_fights: {
+  characters: {
     metodo: 'g',
-    url: 'market/do_fights',
+    url: 'api/characters',
     dados: {},
+  },
+  personal_account: {
+    metodo: 'g',
+    url: 'api/personal_account',
+    dados: {},
+  },
+  transfer_character: {
+    metodo: 'p',
+    url: 'market/transfer_character',
+    dados: {from: null, to: null, charId: null},
+  },
+  transfer_weapon: {
+    metodo: 'p',
+    url: 'market/transfer_weapon',
+    dados: {from: null, to: null, weaponId: null},
+  },
+  do_fights: {
+    metodo: 'p',
+    url: 'market/do_fights',
+    dados: {max_num_figths : 0},
   },
 	load_weapons: {
     metodo: 'g',
@@ -41,6 +61,21 @@ const urlsMy = {
   from_game_to_stake: {
     metodo: 'g',
     url: 'market/from_game_to_stake',
+    dados: {},
+  },
+  update_items_account: {
+    metodo: 'p',
+    url: 'market/update_items_account',
+    dados: {accounts: null},
+  },
+  update_experience_table: {
+    metodo: 'g',
+    url: 'market/update_experience_table',
+    dados: {},
+  },
+  experience_table: {
+    metodo: 'g',
+    url: 'api/xp_table',
     dados: {},
   },
 }

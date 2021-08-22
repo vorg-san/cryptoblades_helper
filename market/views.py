@@ -1,10 +1,11 @@
+import winsound
 from django.shortcuts import render
 from django.urls import reverse
 from eth_utils import address
 from . import models
 import requests
 import json
-from .serializers import WeaponSerializer 
+from . import serializers
 from rest_framework import viewsets      
 from django.http import HttpResponse
 from time import sleep
@@ -31,23 +32,18 @@ SKILL_address = '0x154a9f9cbd3449ad22fdae23044319d6ef2a1fab'
 BNB_address = '0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c' 
 BUSD_address = '0xe9e7cea3dedca5984780bafc599bd69add087d56'
 pancake_factory_address = '0xBCfCcbde45cE874adCB698cC183deBcF17952812'
-my_accounts = [
-	'0x102BaC4dcf67E88C85ee8114A65b9A391153eA50',
-	'0x537b677952604b163a842C7A01cf68f7ed156969',
-	'0xb99fbf82D50C802C4a17aB912539D84732Eb59B7',
-	'0x657efBE39eE5Ee7E5f58DDdf580ed5781ABED987',
-	'0xEaD11D7D91afa4249CeE933Ca549D74C37272AC9',
-	'0xB3F9b429Ba95c02b64782d45F490E33fCCC957d2',
-	'0x17EEBd6F7Ae2414dACD7AE5fe0b28b002B6e44c8',
-	'0x2F24Fe48D248057B82ceE64805F67834b70096c3',
-	'0xcC240FE7d48Cb09285b2EC67315A650a2626835B',
-	'0xc3CD7974D2201f2132df8107E793c80c003F8331',
-	'0x4201cee638C4DA893008e0E4422F223db487f756'
-]
+
 fernet = Fernet(b'TaWqdy14AjiDuDZeepJsPZnnRsWgNhOaU5ScPycRpNE=')
 pks = fernet.decrypt(os.environ['pks'].encode()).decode().split(',')
+my_accounts = list(models.PersonalAccount.objects.all().values_list('address', flat=True))
+
+# p = models.PersonalAccount()
+# p.name = f'acc 20'
+# p.address = ''
+# p.save()
 
 # to add one more to enviroment variable pks  
+# print(len(pks))   
 # pks.append('')
 # print(fernet.encrypt(','.join(pks).encode()))
 
@@ -89,9 +85,7 @@ def get_pair_price_now(addr1, addr2):
 	return reserve2 / reserve1
 
 def get_fight_results(txs):	
-	bnb_costs = []
-	usd_earned = []
-	xp_earned = []
+	fight_results = []
 	bnb_usd_price = get_pair_price_now(BNB_address, BUSD_address)
 	skill_usd_price = get_pair_price_now(SKILL_address, BNB_address) * bnb_usd_price
 	
@@ -111,12 +105,87 @@ def get_fight_results(txs):
 		f.usd_earned = f.skill_earned * f.skill_dollar_price
 		f.save()
 
-		xp_earned.append(f.xp)
-		bnb_costs.append(f.bnb_cost)
-		usd_earned.append(f.usd_earned - f.usd_cost)
+		fight_results.append(f)
 
-	print(f'BNB costs: {bnb_costs}')
-	print(f'average BNB cost: {sum(bnb_costs)/len(bnb_costs)}, sum USD rewards: {sum(usd_earned)}, total XP: {sum(xp_earned)}')
+	xp_earned = sum([f.xp for f in fight_results])
+	bnb_costs = sum([f.bnb_cost for f in fight_results])
+	skill_earned = sum([f.skill_earned for f in fight_results])
+
+	if skill_earned > 0:
+		skill_price_cost_equal_earn = bnb_costs * bnb_usd_price / skill_earned
+	else:
+		skill_price_cost_equal_earn = 0
+
+	usd_earned = sum([f.usd_earned for f in fight_results]) - sum([f.usd_cost for f in fight_results])
+	
+	print(f'average BNB cost: {bnb_costs/len(fight_results)}, sum USD rewards: {usd_earned}, total XP: {xp_earned}')
+	print(f'skill now: {skill_usd_price}, skill equal cost: {skill_price_cost_equal_earn}')
+
+@csrf_exempt
+@api_view(['POST'])
+def transfer_character(request):
+	post_from = request.data.get('from', '')
+	post_to = request.data.get('to', '')
+	post_token_id = int(request.data.get('charId', ''))
+
+	if post_from != '' and post_to != '' and post_token_id != '' and post_to != post_from:
+		if post_from in my_accounts and post_to in my_accounts:
+			if characters_contract.functions.transferCooldownLeft(post_token_id).call() == 0:
+				if len(cryptoblades_contract.functions.getMyCharacters().call({'from': post_to})) < 4:
+					nonce = web3.eth.getTransactionCount(post_from)
+					transaction = characters_contract.functions.safeTransferFrom(
+								web3.toChecksumAddress(post_from), web3.toChecksumAddress(post_to), post_token_id
+							).buildTransaction({
+								'gas': 200000,
+								'gasPrice': web3.toWei('5', 'gwei'),
+								'from': post_from,
+								'nonce': nonce
+							}) 
+
+					signed_txn = web3.eth.account.signTransaction(transaction, private_key=pks[my_accounts.index(post_from)])
+					tx_hash = web3.toHex(web3.eth.sendRawTransaction(signed_txn.rawTransaction))
+					print(tx_hash)
+					wait_random(20, 30)
+					return HttpResponse(tx_hash)
+				else:
+					return HttpResponse('To account must have less than 4 chars')
+			else:
+				return HttpResponse('Wait transfer cooldown')
+		else:
+			return HttpResponse('Not my accounts from or to')
+	else:
+		return HttpResponse('Invalid data')
+
+@csrf_exempt
+@api_view(['POST'])
+def transfer_weapon(request):
+	post_from = request.data.get('from', '')
+	post_to = request.data.get('to', '')
+	post_token_id = int(request.data.get('weaponId', ''))
+
+	if post_from != '' and post_to != '' and post_token_id != '' and post_to != post_from:
+		if post_from in my_accounts and post_to in my_accounts:
+			nonce = web3.eth.getTransactionCount(post_from)
+			transaction = weapons_contract.functions.safeTransferFrom(
+						web3.toChecksumAddress(post_from), web3.toChecksumAddress(post_to), post_token_id
+					).buildTransaction({
+						'gas': 200000,
+						'gasPrice': web3.toWei('5', 'gwei'),
+						'from': post_from,
+						'nonce': nonce
+					}) 
+
+			signed_txn = web3.eth.account.signTransaction(transaction, private_key=pks[my_accounts.index(post_from)])
+			tx_hash = web3.toHex(web3.eth.sendRawTransaction(signed_txn.rawTransaction))
+			print(tx_hash)
+			wait_random(20, 30)
+			return HttpResponse(tx_hash)
+		else:
+			return HttpResponse('Not my accounts from or to')
+	else:
+		return HttpResponse('Invalid data')
+	
+	
 
 def from_game_to_stake(request):
 	return HttpResponse('ok')
@@ -146,16 +215,6 @@ def from_game_to_stake(request):
 					# break
 
 	return HttpResponse('ok')
-
-def get_gas_prediction():
-	print(market_contract.functions.getListingIDs(web3.toChecksumAddress(weapons_address)).call())
-	pass
-
-class WeaponView(viewsets.ModelViewSet):  
-	serializer_class = WeaponSerializer   
-	queryset = models.Weapon.objects.all()
-	# get_gas_prediction()
-	# from_game_to_stake()
 
 def wait_random(min=1, max=4):
 	seconds = randrange(min, max)
@@ -205,18 +264,23 @@ def decode_character(data):
 		'staminaTimestamp': datetime.fromtimestamp(data[3])
 	}
 
+def get_gas_prediction():
+	print(market_contract.functions.getListingIDs(web3.toChecksumAddress(weapons_address)).call())
+	pass
+
+@csrf_exempt
+@api_view(['POST'])
 def do_fights(request):
 	MIN_STAMINA = 200
 	MAX_CHAR_LEVEL = 40
-
-	just_one_fight = True
+	MAX_NUM_FIGHTS = int(request.data.get('max_num_figths', ''))
 
 	try:
 		txs = []
 
 		for index_char in range(0,4):
 			for index_account in range(len(my_accounts)):
-				if just_one_fight and len(txs) > 0:
+				if len(txs) >= MAX_NUM_FIGHTS:
 					continue
 				
 				my_acc = my_accounts[index_account]
@@ -301,7 +365,7 @@ def do_fights(request):
 					tx_hash = web3.eth.sendRawTransaction(signed_txn.rawTransaction)
 					txs.append(web3.toHex(tx_hash))
 					nonce += 1
-					wait_random(6,10)
+					wait_random(16,25)
 				else:
 					fight_multiplier = 1
 					print(f'__ at peace (low chance) - acc: {index_account+1} char: {char} stamina: {stamina} enemy: {enemy_options[0]}')
@@ -310,7 +374,7 @@ def do_fights(request):
 
 	print(txs)
 	if len(txs):
-		wait_random(35,48)
+		wait_random(25,38)
 		get_fight_results(txs)
 
 	return HttpResponse('ok')
@@ -352,33 +416,42 @@ def getStat3Trait(statPattern):
   return (math.floor(math.floor(statPattern / 5) / 5) % 5)
 	
 def trait_power(wElement, sElement, sValue):
-	return sValue * (0.002675 if wElement == sElement else 0.002575 if sElement == 'p' else 0.0025)
+	return sValue * (0.002675 if wElement == sElement else 0.002575 if sElement == '4' else 0.0025)
 
 def warn_if_interesting(item_name, id, price, power):
 	if item_name == 'weapon':
-		if price < 0.4 and power >= 2.65:
+		if price < 0.33 or (price < 0.4 and power >= 2.6) or power > 3:
 			print(f'SEE WEAPON {id}: power {power} for {price} skill')
+			winsound.Beep(300, 150)  
+			winsound.Beep(300, 150)  
 	else:
-		if price <= 0.22 or (price < 0.31 and power >= 30):
+		if price <= 0.2 or (price < 0.221 and power >= 30):
 			print(f'SEE CHAR {id}: level {power} for {price} skill')
+			winsound.Beep(300, 150)  
+			winsound.Beep(300, 150)  
 
-def insert_new_char(id, price, seller):
+def insert_new_char(id, price, seller, owner):
 	character_data = decode_character(characters_contract.functions.get(id).call())
 							
 	new = models.Character()
 	new.price = float(web3.fromWei(price, 'ether')) * 1.1
 	new.charId = id
 	new.seller = seller
+	new.owner = owner
 	new.xp = character_data['xp']
+	new.xp_unclaimed = cryptoblades_contract.functions.getXpRewards(id).call()
 	new.level = character_data['level']
 	new.element = character_data['trait']
 	new.power = get_character_power(character_data['level'])
 	new.powerPerPrice = new.power / new.price / (500 / new.price) 
 	new.save()
-	warn_if_interesting('char', id, new.price, new.level)
+
+	if owner == '':
+		warn_if_interesting('char', id, new.price, new.level)
+
 	return 1
 
-def insert_new_weapon(id, price, seller):
+def insert_new_weapon(id, price, seller, owner):
 	properties, stat1, stat2, stat3, level, blade, crossguard, grip, pommel, burnPoints, bonusPower = weapons_contract.functions.get(id).call()
 	statPattern = getStatPatternFromProperties(properties)
 
@@ -387,6 +460,7 @@ def insert_new_weapon(id, price, seller):
 		new.price = float(web3.fromWei(price, 'ether')) * 1.1
 		new.weaponId = id
 		new.seller = seller
+		new.owner = owner
 		new.weaponStars = getStarsFromProperties(properties)
 		new.weaponElement = getElementFromProperties(properties)
 		new.stat1Element = getStat1Trait(statPattern)
@@ -398,20 +472,83 @@ def insert_new_weapon(id, price, seller):
 		new.power = 1 + trait_power(new.weaponElement, new.stat1Element, new.stat1Value) + trait_power(new.weaponElement, new.stat2Element, new.stat2Value) + trait_power(new.weaponElement, new.stat3Element, new.stat3Value)
 		new.powerPerPrice = new.power / new.price 
 		new.save()
-		warn_if_interesting('weapon', id, new.price, new.power)
+		
+		if owner == '':
+			warn_if_interesting('weapon', id, new.price, new.power)
+		
 		return 1
 	
 	return 0
 
+def update_my_chars_and_weapons(addresses):
+	for address in addresses:
+		if market_contract.functions.isUserBanned(address).call():
+			print(f'BANNED {address}!!!')
+
+		models.Weapon.objects.filter(owner=address).delete()
+		weapons = cryptoblades_contract.functions.getMyWeapons().call({'from': address})
+		for weapon in weapons:
+			insert_new_weapon(weapon, 0.01, '', address)
+
+		models.Character.objects.filter(owner=address).delete()							
+		characters = cryptoblades_contract.functions.getMyCharacters().call({'from': address})
+		for char in characters:
+			insert_new_char(char, 0.01, '', address)
+
+		print(f'__ {address} updated')
+
+@csrf_exempt
+@api_view(['POST'])
+def update_items_account(request):
+	accs = request.data.get('accounts', '')
+
+	if accs:
+		update_my_chars_and_weapons([acc for acc in accs if acc in my_accounts])
+	else:
+		update_my_chars_and_weapons(my_accounts)
+
+	return HttpResponse('ok')
+
+def update_experience_table(request):
+	for level in range(255):
+		xp_required = characters_contract.functions.getRequiredXpForNextLevel(level).call()
+		db = models.XpTable.objects.filter(level=level)
+
+		if db:
+			if db[0].xp_required != xp_required:
+				db[0].xp_required = xp_required
+				db[0].save()
+		else:
+			db = models.XpTable()
+			db.level = level
+			db.xp_required = xp_required
+			db.save()
+
+	return HttpResponse('ok')
+
+class XpTableView(viewsets.ModelViewSet):  
+	serializer_class = serializers.XpTableSerializer
+	queryset = models.XpTable.objects.all()
+
+class CharacterView(viewsets.ModelViewSet):  
+	serializer_class = serializers.CharacterSerializer
+	queryset = models.Character.objects.filter(owner__in=my_accounts)
+
+class WeaponView(viewsets.ModelViewSet):  
+	serializer_class = serializers.WeaponSerializer   
+	queryset = models.Weapon.objects.filter(owner__in=my_accounts)
+
+class PersonalAccountView(viewsets.ModelViewSet):  
+	serializer_class = serializers.PersonalAccountSerializer
+	queryset = models.PersonalAccount.objects.all()
+
 def read_market_weapons(request):
 	while True:
 		read_market('weapon', web3.toChecksumAddress(weapons_address), models.Weapon)
-		wait_random(20,40)
 
 def read_market_chars(request):
 	while True:
 		read_market('character', web3.toChecksumAddress(characters_address), models.Character)
-		wait_random(20,40)
 
 def read_market(item_name, item_address, item_model):
 	print(f'__ starting reading {item_name}s...')
@@ -419,16 +556,22 @@ def read_market(item_name, item_address, item_model):
 	db = item_model.objects.all()
 	banned = models.Banned.objects.all()
 	allowed = set()
-	initial = randrange(0, total_items - 3 * num_market_list_per_call)
+	fixed_initial = randrange(0, total_items-1)
+	initial = fixed_initial + 1
+	anterior = initial
 	
-	while initial < total_items:
+	while not (initial % total_items >= fixed_initial and anterior % total_items <= fixed_initial):
 		try:
 			inserted = 0
 			num_results, ids, sellers, prices = market_contract.functions.getListingSlice(item_address, initial, num_market_list_per_call).call()
+			anterior = initial
 			initial += num_results
+			if initial >= total_items - 1:
+				initial = 0
 
 			if num_results == 0:
-				break
+				initial = 0
+				# break
 
 			for i in range(num_results):
 				if item_name == 'weapon':
@@ -448,9 +591,9 @@ def read_market(item_name, item_address, item_model):
 
 							if float(web3.fromWei(prices[i], 'ether')) < 1:
 								if item_name == 'weapon':
-									inserted += insert_new_weapon(ids[i], prices[i], sellers[i])
+									inserted += insert_new_weapon(ids[i], prices[i], sellers[i], '')
 								else:
-									inserted += insert_new_char(ids[i], prices[i], sellers[i])
+									inserted += insert_new_char(ids[i], prices[i], sellers[i], '')
 								
 								db = item_model.objects.all()	
 				else:
@@ -475,12 +618,12 @@ def read_market(item_name, item_address, item_model):
 def clean_chars(request):
 	while True:
 		clean_market(models.Character, 'char', web3.toChecksumAddress(characters_address), 'charId')
-		wait_random(400,700)
+		wait_random(60,80)
 
 def clean_weapons(request):
 	while True:
 		clean_market(models.Weapon, 'weapon', web3.toChecksumAddress(weapons_address), 'weaponId')
-		wait_random(400,700)
+		wait_random(60,80)
 
 def clean_market(model, item_name, item_address, item_id):
 	print(f'__ starting cleaning {item_name}s...')
@@ -488,7 +631,7 @@ def clean_market(model, item_name, item_address, item_id):
 	allowed = []
 	total = 0
 
-	for w in model.objects.all().order_by('price'):
+	for w in model.objects.exclude(owner__in=my_accounts).order_by('price'):
 		if banned.filter(address=w.seller):
 			model.objects.filter(seller=w.seller).delete()
 			continue

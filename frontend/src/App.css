@@ -29,3 +29,22 @@
   width: 1em;
   height: 1em;
 }
+
+.power-icon {
+  color: grey;
+  content: url('assets/elements/power.png');
+  height: 1em;
+}
+
+body, .table {
+	background-color: #1f173d;
+	color: white;
+}
+
+.green {
+	color: green;
+}
+
+button {
+	margin-right: 15px;
+}

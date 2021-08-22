@@ -4,6 +4,7 @@ from django.utils import timezone
 class Weapon(models.Model):
 	weaponId = models.CharField(max_length=100)
 	seller = models.CharField(max_length=200)
+	owner = models.CharField(max_length=200)
 	price = models.FloatField()
 	weaponStars = models.IntegerField()
 	weaponElement = models.CharField(max_length=100)
@@ -23,8 +24,10 @@ class Weapon(models.Model):
 class Character(models.Model):
 	charId = models.CharField(max_length=100)
 	seller = models.CharField(max_length=200)
+	owner = models.CharField(max_length=200)
 	price = models.FloatField()
 	xp = models.IntegerField()
+	xp_unclaimed = models.IntegerField()
 	level = models.IntegerField()
 	power = models.IntegerField()
 	element = models.CharField(max_length=100)
@@ -36,6 +39,14 @@ class Character(models.Model):
 
 class Banned(models.Model):
 	address = models.CharField(max_length=200)
+	
+class PersonalAccount(models.Model):
+	name = models.CharField(max_length=200)
+	address = models.CharField(max_length=200)
+
+class XpTable(models.Model):
+	level = models.IntegerField()
+	xp_required = models.IntegerField()
 
 class Fight(models.Model):
 	address = models.CharField(max_length=200)

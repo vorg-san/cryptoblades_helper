@@ -19,7 +19,10 @@ from rest_framework import routers
 from market import views                
          
 router = routers.DefaultRouter()                   
-router.register(r'weapons', views.WeaponView, 'weapon')  
+router.register(r'weapons', views.WeaponView, 'weapons')  
+router.register(r'characters', views.CharacterView, 'characters')  
+router.register(r'personal_account', views.PersonalAccountView, 'personal_account')  
+router.register(r'xp_table', views.XpTableView, 'xp_table')  
 
 urlpatterns = [
     path("market/", include("market.urls")),
