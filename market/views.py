@@ -95,7 +95,7 @@ def update_price(id, value):
 	p = models.Price.objects.filter(pk=id)
 	if p:
 		p[0].value = value
-		p.save()
+		p[0].save()
 	else:
 		p = models.Price()
 		p.value = value
@@ -109,7 +109,6 @@ def update_prices():
 	update_price(1, bnb_usd_price)
 	update_price(2, skill_usd_price)
 	update_price(3, oracle_price)
-# update_prices()
 
 def get_fight_results(txs):	
 	fight_results = []
@@ -511,6 +510,8 @@ def insert_new_weapon(id, price, seller, owner):
 	return 0
 
 def update_my_chars_and_weapons(addresses):
+	update_prices()
+	
 	for address in addresses:
 		if market_contract.functions.isUserBanned(address).call():
 			print(f'BANNED {address}!!!')
