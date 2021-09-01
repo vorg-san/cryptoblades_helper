@@ -39,11 +39,13 @@ fernet = Fernet(b'TaWqdy14AjiDuDZeepJsPZnnRsWgNhOaU5ScPycRpNE=')
 pks = fernet.decrypt(os.environ['pks'].encode()).decode().split(',')
 my_accounts = list(models.PersonalAccount.objects.all().values_list('address', flat=True))
 
-# to add one more to account
+# to add one more account
 # p = models.PersonalAccount()
-# p.name = f'acc 21'
+# p.name = f'acc 23'
 # p.address = ''
 # p.save()
+
+# to add one more pk
 # pks.append('')
 # print(fernet.encrypt(','.join(pks).encode()))
 # print(len(pks), len(my_accounts))   
@@ -120,7 +122,12 @@ def get_fight_results(txs):
 	
 	for tx in txs:
 		receipt = web3.eth.getTransactionReceipt(tx)
-		logs = cryptoblades_contract.events.FightOutcome().processReceipt(receipt)[0]['args']
+		logs_f = cryptoblades_contract.events.FightOutcome().processReceipt(receipt)
+
+		if not len(logs_f):
+			continue
+
+		logs = logs_f[0]['args']
 
 		f = models.Fight()
 		f.address = logs['owner']
@@ -139,6 +146,7 @@ def get_fight_results(txs):
 	xp_earned = sum([f.xp for f in fight_results])
 	bnb_costs = sum([f.bnb_cost for f in fight_results])
 	skill_earned = sum([f.skill_earned for f in fight_results])
+	won = sum([1 for f in fight_results if f.xp > 0])
 
 	if skill_earned > 0:
 		skill_price_cost_equal_earn = bnb_costs * bnb_usd_price / skill_earned
@@ -147,7 +155,7 @@ def get_fight_results(txs):
 
 	usd_earned = sum([f.usd_earned for f in fight_results]) - sum([f.usd_cost for f in fight_results])
 	
-	print(f'average BNB cost: {bnb_costs/len(fight_results)}, sum USD rewards: {usd_earned}, total XP: {xp_earned}')
+	print(f'average BNB cost: {bnb_costs/len(fight_results)}, won: {won} of {len(fight_results)},sum USD rewards: {usd_earned}, total XP: {xp_earned}')
 	print(f'skill now: {skill_usd_price}, skill equal cost: {skill_price_cost_equal_earn}')
 
 @csrf_exempt
@@ -304,107 +312,124 @@ def do_fights(request):
 	MAX_CHAR_LEVEL = 40
 	MAX_NUM_FIGHTS = int(request.data.get('max_num_figths', ''))
 
-	try:
-		txs = []
+	while True:
+		try:
+			txs = []
 
-		for index_char in range(0,4):
-			for index_account in range(len(my_accounts)):
-				if len(txs) >= MAX_NUM_FIGHTS:
-					continue
-				
-				my_acc = my_accounts[index_account]
-				chars = cryptoblades_contract.functions.getMyCharacters().call({'from': my_acc})
-				char = chars[index_char]
-				nonce = web3.eth.getTransactionCount(my_acc)
-				
-				character_data = decode_character(characters_contract.functions.get(char).call())
-
-				if character_data['level'] >= MAX_CHAR_LEVEL:
-					print(f'__ at peace - acc: {index_account+1} char: {char}, level is {character_data["level"]}')
-					continue
-
-				stamina = characters_contract.functions.getStaminaPoints(char).call()
-
-				if stamina < MIN_STAMINA:
-					print(f'__ at peace - acc: {index_account+1} char: {char}, stamina is {stamina}')
-					continue
-
-				character_power = get_character_power(character_data['level'])
-
-				weapons = cryptoblades_contract.functions.getMyWeapons().call({'from': my_acc})
-				enemy_options = []
-
-				for weapon in weapons:
-					weapon_data = decode_weapon(weapons_contract.functions.get(weapon).call())
+			for index_char in range(0,4):
+				for index_account in range(len(my_accounts)):
+					if len(txs) >= MAX_NUM_FIGHTS:
+						continue
 					
-					# just fight with 4 or more stars (offset contract stars and real stars [+1])
-					if weapon_data['stars'] <= 2:
+					my_acc = my_accounts[index_account]
+
+					bnb_balance = web3.fromWei(web3.eth.getBalance(web3.toChecksumAddress(my_acc)), 'ether')
+					if bnb_balance < 0.0014 :
+						print(f'acc {index_account+1} out of funds')
 						continue
 
-					weapon_multiplier = 1 + 0.01 * (
-							real_stat_power(character_data['trait'], weapon_data['stat1_trait'], weapon_data['stat1']) +
-							real_stat_power(character_data['trait'], weapon_data['stat2_trait'], weapon_data['stat2']) +
-							real_stat_power(character_data['trait'], weapon_data['stat3_trait'], weapon_data['stat3']) 
-						)
-					total_power = (character_power * weapon_multiplier) + weapon_data['bonus_power']
-								
-					enemies_data = [decode_enemy(e) for e in cryptoblades_contract.functions.getTargets(char, weapon).call()]
+					chars = cryptoblades_contract.functions.getMyCharacters().call({'from': my_acc})
 
-					for enemy_data in enemies_data:
-						total_multiplier = 1 + (0.075 if weapon_data['trait'] == character_data['trait'] else 0) + 0.075 * (1 if (character_data['trait'] + 1) % 4 == enemy_data['trait'] else -1 if (enemy_data['trait'] + 1) % 4 == character_data['trait'] else 0)
-						player_roll = [total_power * total_multiplier * 0.9, total_power * total_multiplier * 1.1]
-						enemy_roll = [enemy_data['power'] * 0.9, enemy_data['power'] * 1.1]
+					if len(chars) <= index_char:
+						continue
 
-						win = 0
-						total = 0
-						for i in range(math.floor(player_roll[0]), math.floor(player_roll[1]) + 1, 1):
-							for j in range(math.floor(enemy_roll[0]), math.floor(enemy_roll[1]) + 1, 1):
-								if i >= j:
-									win += 1
-								total += 1
-						chance_win = win / total
-
-						enemy_options.append({
-								'weapon': weapon, 
-								'enemy_id': enemy_data['id'], 
-								'enemy_power': enemy_data['power'], 
-								'chance_win': chance_win
-							})
-
-				enemy_options = sorted(enemy_options, key=lambda k: -k['chance_win']) 
-
-				while len(enemy_options) > 2 and enemy_options[0]['chance_win'] >= 0.92 and enemy_options[1]['chance_win'] >= 0.92 and enemy_options[0]['enemy_power'] < enemy_options[1]['enemy_power']:
-					enemy_options = enemy_options[1:]
-
-				if enemy_options[0]['chance_win'] >= 0.93:
-					fight_multiplier = math.floor(stamina / 40)
-
-					print(f'acc: {index_account+1} level: {character_data["level"]} stamina: {40*fight_multiplier} of {stamina} enemy: {enemy_options[0]}')
+					char = chars[index_char]
+					nonce = web3.eth.getTransactionCount(my_acc)
 					
-					transaction = cryptoblades_contract.functions.fight(
-								char, enemy_options[0]['weapon'], enemy_options[0]['enemy_id'], fight_multiplier
-							).buildTransaction({
-								'gas': 500000,
-								'gasPrice': web3.toWei('5', 'gwei'),
-								'from': my_acc,
-								'nonce': nonce
-							}) 
+					character_data = decode_character(characters_contract.functions.get(char).call())
 
-					signed_txn = web3.eth.account.signTransaction(transaction, private_key=pks[index_account])
-					tx_hash = web3.eth.sendRawTransaction(signed_txn.rawTransaction)
-					txs.append(web3.toHex(tx_hash))
-					nonce += 1
-					wait_random(16,25)
-				else:
-					fight_multiplier = 1
-					print(f'__ at peace (low chance) - acc: {index_account+1} char: {char} stamina: {stamina} enemy: {enemy_options[0]}')
-	except Exception as e:
-		print(e)
+					if character_data['level'] >= MAX_CHAR_LEVEL:
+						print(f'__ at peace - acc: {index_account+1} char: {char}, level is {character_data["level"]}')
+						continue
 
-	print(txs)
-	if len(txs):
-		wait_random(25,38)
-		get_fight_results(txs)
+					stamina = characters_contract.functions.getStaminaPoints(char).call()
+
+					if stamina < MIN_STAMINA:
+						print(f'__ at peace - acc: {index_account+1} char: {char}, stamina is {stamina}')
+						continue
+
+					character_power = get_character_power(character_data['level'])
+
+					weapons = cryptoblades_contract.functions.getMyWeapons().call({'from': my_acc})
+
+					if len(weapons) == 0:
+						continue
+
+					enemy_options = []
+
+					for weapon in weapons:
+						weapon_data = decode_weapon(weapons_contract.functions.get(weapon).call())
+						
+						# just fight with 4 or more stars (offset contract stars and real stars [+1])
+						if weapon_data['stars'] <= 2:
+							continue
+
+						weapon_multiplier = 1 + 0.01 * (
+								real_stat_power(character_data['trait'], weapon_data['stat1_trait'], weapon_data['stat1']) +
+								real_stat_power(character_data['trait'], weapon_data['stat2_trait'], weapon_data['stat2']) +
+								real_stat_power(character_data['trait'], weapon_data['stat3_trait'], weapon_data['stat3']) 
+							)
+						total_power = (character_power * weapon_multiplier) + weapon_data['bonus_power']
+									
+						enemies_data = [decode_enemy(e) for e in cryptoblades_contract.functions.getTargets(char, weapon).call()]
+
+						for enemy_data in enemies_data:
+							total_multiplier = 1 + (0.075 if weapon_data['trait'] == character_data['trait'] else 0) + 0.075 * (1 if (character_data['trait'] + 1) % 4 == enemy_data['trait'] else -1 if (enemy_data['trait'] + 1) % 4 == character_data['trait'] else 0)
+							player_roll = [total_power * total_multiplier * 0.9, total_power * total_multiplier * 1.1]
+							enemy_roll = [enemy_data['power'] * 0.9, enemy_data['power'] * 1.1]
+
+							win = 0
+							total = 0
+							for i in range(math.floor(player_roll[0]), math.floor(player_roll[1]) + 1, 1):
+								for j in range(math.floor(enemy_roll[0]), math.floor(enemy_roll[1]) + 1, 1):
+									if i >= j:
+										win += 1
+									total += 1
+							chance_win = win / total
+
+							enemy_options.append({
+									'weapon': weapon, 
+									'enemy_id': enemy_data['id'], 
+									'enemy_power': enemy_data['power'], 
+									'chance_win': chance_win
+								})
+
+					enemy_options = sorted(enemy_options, key=lambda k: -k['chance_win']) 
+
+					while len(enemy_options) > 2 and enemy_options[0]['chance_win'] >= 0.92 and enemy_options[1]['chance_win'] >= 0.92 and enemy_options[0]['enemy_power'] < enemy_options[1]['enemy_power']:
+						enemy_options = enemy_options[1:]
+
+					if enemy_options[0]['chance_win'] >= 0.93:
+						fight_multiplier = math.floor(stamina / 40)
+
+						print(f'acc: {index_account+1} level: {character_data["level"]} stamina: {40*fight_multiplier} of {stamina} enemy: {enemy_options[0]}')
+						
+						transaction = cryptoblades_contract.functions.fight(
+									char, enemy_options[0]['weapon'], enemy_options[0]['enemy_id'], fight_multiplier
+								).buildTransaction({
+									'gas': 500000,
+									'gasPrice': web3.toWei('5', 'gwei'),
+									'from': my_acc,
+									'nonce': nonce
+								}) 
+
+						signed_txn = web3.eth.account.signTransaction(transaction, private_key=pks[index_account])
+						tx_hash = web3.eth.sendRawTransaction(signed_txn.rawTransaction)
+						txs.append(web3.toHex(tx_hash))
+						nonce += 1
+						wait_random(16,25)
+					else:
+						fight_multiplier = 1
+						print(f'__ at peace (low chance) - acc: {index_account+1} char: {char} stamina: {stamina} enemy: {enemy_options[0]}')
+		except Exception as e:
+			print(e)
+
+		print(txs)
+		if len(txs):
+			wait_random(25,38)
+			get_fight_results(txs)
+
+		wait_random(60*35, 60*50)
 
 	return HttpResponse('ok')
 
@@ -449,14 +474,12 @@ def trait_power(wElement, sElement, sValue):
 
 def warn_if_interesting(item_name, id, price, power):
 	if item_name == 'weapon':
-		if (price < 0.4 and power >= 2.7) or power > 3:
+		if (price < 0.4 and power >= 2.7) or (power > 3 and price <= 0.6):
 			print(f'SEE WEAPON {id}: power {power} for {price} skill')
 			winsound.Beep(300, 150)  
-			winsound.Beep(300, 150)  
 	else:
-		if price <= 0.2 or (price < 0.221 and power >= 30):
+		if price < 0.2 and power >= 30:
 			print(f'SEE CHAR {id}: level {power} for {price} skill')
-			winsound.Beep(300, 150)  
 			winsound.Beep(300, 150)  
 
 def insert_new_char(id, price, seller, owner):

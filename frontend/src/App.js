@@ -9,7 +9,13 @@ function App() {
   const [accounts, setAccounts] = useState();
   const [myAccounts, setMyAccounts] = useState();
 	const [numFights, setNumFights] = useState();
-	const [prices, setPrices] = useState();
+	const [bnbUsd, setBnbUsd] = useState();
+	const [skillUsd, setSkillUsd] = useState();
+	const [oracleSkillUsd, setOracleSkillUsd] = useState();
+	const [bnbWallet, setBnbWallet] = useState();
+	const [skillInGame, setSkillInGame] = useState();
+	const [skillStaked, setSkillStaked] = useState();
+	const [skillWallet, setSkillWallet] = useState();
 
 	function shortAddress(a) {
 		return a.substring(0,6) + '...' + a.substring(a.length - 4, a.length)
@@ -47,7 +53,7 @@ function App() {
 		let my_accs = await apiMy('personal_account')
 		let xp_table = await apiMy('experience_table')
 		let price = await apiMy('price')
-		setPrices(price)
+		
 		let accs = []
 
 		let chars = await apiMy("characters")
@@ -88,6 +94,23 @@ function App() {
 
 		accs.sort((a, b) => parseInt(a.name.split(' ')[1]) - parseInt(b.name.split(' ')[1]))
 
+		let bnb = 0
+		let skill_in_game = 0
+		let skill_staked = 0
+		let skill = 0
+		
+		accs.map(a => {
+			bnb += a.bnb
+			skill_in_game += a.skill_in_game
+			skill_staked += a.skill_staked
+			skill += a.skill
+		})
+
+		setBnbWallet(bnb)
+		setSkillInGame(skill_in_game)
+		setSkillStaked(skill_staked)
+		setSkillWallet(skill)
+
 		// let rem = ['acc 1','acc 2','acc 3','acc 4','acc 5','acc 6','acc 7','acc 8',
 		// 'acc 12','acc 13','acc 14','acc 9','acc 16','acc 19','acc 11','acc 10','acc 15',]
 		// accs = accs.filter(a => !rem.includes(a.name))
@@ -95,6 +118,9 @@ function App() {
 
 		setAccounts(accs)
 		setMyAccounts(my_accs)
+		setBnbUsd(price[0].value)
+		setSkillUsd(price[1].value)
+		setOracleSkillUsd(price[2].value)
 	}, [])
 
   useEffect(() => {
@@ -202,6 +228,30 @@ function App() {
 				<br/><br/>
 
 				<div className="row">
+          <div className="col-2">
+						BNB: {bnbWallet?.toFixed(2)}<br/>
+						$ {(bnbWallet * bnbUsd)?.toFixed(2)}
+					</div>
+          <div className="col-2">
+						Skill: {skillWallet?.toFixed(2)}<br/>
+						$ {(skillWallet * skillUsd)?.toFixed(2)}
+					</div>
+          <div className="col-2">
+						Skill staked: {skillStaked?.toFixed(2)}<br/>
+						$ {(skillStaked * skillUsd)?.toFixed(2)}
+					</div>
+          <div className="col-2">
+						Skill in game: {skillInGame?.toFixed(2)}<br/>
+						$ {(skillInGame * skillUsd)?.toFixed(2)}
+					</div>
+          <div className="col-2">
+						Total: $ {((skillInGame + skillStaked + skillWallet) * skillUsd + bnbWallet * bnbUsd)?.toFixed(2)}
+					</div>
+				</div>        
+
+				<br/><br/>
+
+				<div className="row">
           <div className="col-11 offset-1">
             {accounts && (
               <table className="table">
@@ -234,7 +284,7 @@ function App() {
 													<td rowSpan={accounts[accIndex].items.length}>{acc.name}</td>
 													<td rowSpan={accounts[accIndex].items.length}>
 														{shortAddress(acc.address)}<br/>
-														{acc.bnb.toFixed(3)} bnb ${(acc.bnb * prices[0]?.value).toFixed(0)}<br/>
+														{acc.bnb.toFixed(3)} bnb ${(acc.bnb * bnbUsd).toFixed(0)}<br/>
 														{acc.skill.toFixed(3)} skill<br/>
 														{acc.skill_staked.toFixed(3)} staked<br/>
 														{acc.skill_in_game.toFixed(3)} in game
