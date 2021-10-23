@@ -27,5 +27,6 @@ router.register(r'price', views.PriceView, 'price')
 
 urlpatterns = [
     path("market/", include("market.urls")),
+    path("cmc/", include("cmc.urls")),
     path('api/', include(router.urls))     
 ]

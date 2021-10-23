@@ -1,7 +1,7 @@
 import axios from 'axios'
 import {trackPromise} from 'react-promise-tracker'
 
-const raizMy = 'http://localhost:8000/'
+const raizMy = 'http://localhost:9000/'
 const urlsMy = {
   weapons: {
     metodo: 'g',
@@ -102,26 +102,6 @@ export const apiMy = async (...args) => {
   }
 }
 
-const raizCB = 'http://localhost:8000/api/'
-const urlsCB = {
-}
-const axiosCB = axios.create({
-  baseURL: raizCB,
-})
-
-export const apiCBE = async (...args) => {
-  return trackPromise(api(axiosCB, urlsCB, ...args))
-}
-
-export const apiCB = async (...args) => {
-  let [res, err] = await trackPromise(api(axiosCB, urlsCB, ...args))
-
-  if (err) {
-    alert('Erro na chamada API: ' + args[0])
-  } else {
-    return res
-  }
-}
 
 // -------------------------
 

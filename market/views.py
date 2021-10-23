@@ -474,13 +474,13 @@ def trait_power(wElement, sElement, sValue):
 
 def warn_if_interesting(item_name, id, price, power):
 	if item_name == 'weapon':
-		if (price < 0.4 and power >= 2.7) or (power > 3 and price <= 0.6):
+		if (price < 0.4 and power >= 2.7) or (power > 3 and price <= 1.2):
 			print(f'SEE WEAPON {id}: power {power} for {price} skill')
 			winsound.Beep(300, 150)  
 	else:
-		if price < 0.2 and power >= 30:
+		if price < 0.19 and power >= 30:
 			print(f'SEE CHAR {id}: level {power} for {price} skill')
-			winsound.Beep(300, 150)  
+			# winsound.Beep(300, 150)  
 
 def insert_new_char(id, price, seller, owner):
 	character_data = decode_character(characters_contract.functions.get(id).call())
@@ -507,7 +507,7 @@ def insert_new_weapon(id, price, seller, owner):
 	properties, stat1, stat2, stat3, level, blade, crossguard, grip, pommel, burnPoints, bonusPower = weapons_contract.functions.get(id).call()
 	statPattern = getStatPatternFromProperties(properties)
 
-	if getStarsFromProperties(properties) >= 3:
+	if getStarsFromProperties(properties) >= 4 or (seller == '' and getStarsFromProperties(properties) >= 3):
 		new = models.Weapon()
 		new.price = float(web3.fromWei(price, 'ether')) * 1.1
 		new.weaponId = id
@@ -614,9 +614,9 @@ def read_market_weapons(request):
 def read_market_chars(request):
 	while True:
 		read_market('character', web3.toChecksumAddress(characters_address), models.Character)
+		wait_random(25, 69)
 
 def read_market(item_name, item_address, item_model):
-	print(f'__ starting reading {item_name}s...')
 	total_items = market_contract.functions.getNumberOfListingsForToken(item_address).call()
 	db = item_model.objects.all()
 	banned = models.Banned.objects.all()
@@ -625,6 +625,8 @@ def read_market(item_name, item_address, item_model):
 	initial = fixed_initial + 1
 	anterior = initial
 	
+	print(f'__ starting reading {item_name}s, initial is {fixed_initial}') 
+
 	while not (initial % total_items >= fixed_initial and anterior % total_items <= fixed_initial):
 		try:
 			inserted = 0
@@ -654,13 +656,14 @@ def read_market(item_name, item_address, item_model):
 						else:
 							allowed.add(sellers[i])
 
-							if float(web3.fromWei(prices[i], 'ether')) < 1:
-								if item_name == 'weapon':
+							if item_name == 'weapon':
+								if float(web3.fromWei(prices[i], 'ether')) < 1.5:
 									inserted += insert_new_weapon(ids[i], prices[i], sellers[i], '')
-								else:
+									db = item_model.objects.all()	
+							else:
+								if float(web3.fromWei(prices[i], 'ether')) < 0.25:
 									inserted += insert_new_char(ids[i], prices[i], sellers[i], '')
-								
-								db = item_model.objects.all()	
+									db = item_model.objects.all()	
 				else:
 					if prices[i] == 0:
 						item_by_id[0].delete()

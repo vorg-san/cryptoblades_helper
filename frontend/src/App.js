@@ -132,7 +132,7 @@ function App() {
     apiMy("read_market_chars");
     apiMy("clean_weapons");
     apiMy("clean_chars");
-    window.location.href = '/'
+    setTimeout(() => window.location.href = '/', 6000)
   }
 
   async function claimRewards() {
