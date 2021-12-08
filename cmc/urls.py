@@ -4,5 +4,5 @@ from . import views
 
 app_name = 'cmc'
 urlpatterns = [
-	path('ler_cmc', views.ler_cmc),
+	path('good_ones', views.good_ones),
 ]

@@ -1,7 +1,7 @@
 import axios from 'axios'
 import {trackPromise} from 'react-promise-tracker'
 
-const raizMy = 'http://localhost:9000/'
+const raizMy = 'http://localhost:7000/'
 const urlsMy = {
   weapons: {
     metodo: 'g',

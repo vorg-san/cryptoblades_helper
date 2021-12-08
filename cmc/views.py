@@ -1,388 +1,319 @@
-from datetime import datetime, timedelta
-from django.utils import timezone as djangotimezone
-from pytz import timezone
-from django.shortcuts import render
-import requests
-import bs4
-from bs4 import BeautifulSoup
-from time import sleep
-import time
-from random import randrange
-from selenium import webdriver
-from selenium.webdriver.common.by import By
-from selenium.webdriver.common.action_chains import ActionChains
+import math
 from . import models
-import re
-from selenium.common.exceptions import StaleElementReferenceException
+from django.http import HttpResponse
+from django.core import serializers
+from functools import reduce
+import matplotlib.pyplot as plt
+from scipy import stats
+import json
+import mysql.connector
+import traceback
+from datetime import datetime, timedelta
+import time
+from collections import defaultdict
+from prettytable import PrettyTable
 
-def convert_price_to_num(text):
-	return text.strip().replace('$', '').replace(',','').replace('<','')
+BD_PASS = 'Shaman34#'
+mydb = None
+
+def abrir_conexao():
+    global mydb
+    mydb = mysql.connector.connect(user='root', password=BD_PASS,host='127.0.0.1', database='cryptoblades')
+
+def fechar_conexao():
+    mydb.close()
+
+def insertxxx(idManga, titulo, url):
+    c = mydb.cursor(dictionary=True)
+    c.execute("insert into capitulo(manga_id, titulo, url, data) values(%s, %s, %s, CURRENT_TIMESTAMP()) ", 
+                (idManga, titulo, url))
+    mydb.commit()
+
+def group_by(r, column):
+	groups = defaultdict(list)
+	for obj in r:
+			groups[obj[column]].append(obj)
+	return groups.values()
+
+def get_last_pulls_pancakeswap(qty_last_pulls):
+	c = mydb.cursor(dictionary=True)
+	c.execute(
+		"select c.id, c.link, d.price, d.volume, d.market_cap, p.created " + 
+		"from cmc_crypto c  " + 
+		"    join cmc_data d on d.crypto_id = c.id " + 
+		"    join ( " + 
+		"        select id, created " + 
+		"        from cmc_pull  " + 
+		"        order by id desc limit 0, %s " + 
+		"        ) p on p.id = d.pull_id  " + 
+		"    join cmc_delta del on del.data2_id = d.id " + 
+		"    join ( " + 
+		"        select c.id  " + 
+		"        from cmc_exchange ce  " + 
+		"            join cmc_cryptoexchange cc on ce.id = cc.exchange_id  " + 
+		"            join cmc_crypto c on c.id = cc.crypto_id  " + 
+		"        where ce.id = 7 " + 
+		"        group by c.id " + 
+		"    ) ps on ps.id = c.id " + 
+		# "where c.id in (8) " + 
+		# "where c.source_code is not null " + 
+		"order by c.id, p.created  ",
+		(qty_last_pulls,)
+	)
+	r = group_by(c.fetchall(), 'id')
+	return r
+
+def get_cryptos():
+    c = mydb.cursor(dictionary=True)
+    c.execute(
+			"select id, name, link " + 
+			"from cmc_crypto ", 
+			()
+		)
+    r = c.fetchall()
+    return r
+
+def get_dados(id_crypto):
+    c = mydb.cursor(dictionary=True)
+    c.execute(
+			"select p.created, d.price, del.volume  " + 
+			"from cmc_data d " + 
+			"  join cmc_pull p on p.id = d.pull_id  " + 
+			"  join cmc_delta del on del.data2_id = d.id " + 
+			"where d.crypto_id = %s ", 
+			(id_crypto,)
+		)
+    r = c.fetchall()
+    return r
+
+def is_match(d, target, i):
+	res = True
+	for j in range(len(target)):
+		if d[i+j] < target[j]:
+			res = False
+	return res
+
+def profile_match(dados, target, column):
+	d = [x[column] for x in dados]
+	res = [False] * len(dados)
+
+	for i in range(len(d) - len(target)):
+		if is_match(d, target, i):
+			for j in range(len(target)):
+				res[i+j] = True
+
+	return res
+
+def result_if_operate_match(dados, matches, match_pattern):
+	if True not in matches:
+		return (0, 100)
+
+	pattern_size = len(match_pattern)
+	initial = 100
+	bought = 0
+	previous_match = 0
+	total_buys = 0
+
+	for i in range(len(matches)):
+		previous_match = previous_match + 1 if matches[i] else 0
+		# print(dados[i], matches[i])
+		if previous_match >= pattern_size and initial > 0:
+			bought = initial / dados[i]['price']
+			initial = 0
+			total_buys += 1
+			# print(f'bought {bought} at price {dados[i]["price"]}')
+		if initial == 0 and  dados[i]['volume'] < - 10:
+			initial = bought * dados[i]['price']
+			bought = 0
+			# print(f'sold {initial} at price {dados[i]["price"]}')
+
+	if bought > 0:
+		initial = bought * dados[i]['price']
+		bought = 0
+		# print(f'sold {initial} at price {dados[i]["price"]}')
+
+	return (total_buys, int(initial))
+
+def adjust_data_points(dados):
+	return dados
+
+def run():
+	target_vol_min = [8,8,8]
+	target_column = 'volume'
+
+	for c in get_cryptos():
+		dados = adjust_data_points(get_dados(c['id']))
+		matches = profile_match(dados, target_vol_min, target_column)
+		print(c['id'], c['name'], c['link'], result_if_operate_match(dados, matches, target_vol_min))
+
+	# for i, d in enumerate(dados):
+	# 	print(d, matches[i])
+
+def growing(p):
+	r = 0
+	for i in range(1, len(p)):
+		for j in range(i-1, -1, -1):
+			if p[i] > p[j]:
+				r += 1
+	return r
 
 
-
-def wait_random(min=1, max=5):
-	sleep(randrange(min, max))
-
-class cmc:
-	def __init__(self, browser, start_page=1, previous_pull=None, create_pull=True):
-		self.previous_pull = previous_pull
-		self.browser = browser
+def alert_growing_ps():
+	good_ones = []
+	for c in get_last_pulls_pancakeswap(5):
+		prices = [p['price'] for p in c]
+		p = growing(prices)
+		v = growing([p['volume'] for p in c])
+		vol = (c[0]['volume']+c[-1]['volume'])/2
+		mc = c[-1]['market_cap']
 		
-		if create_pull:
-			self.browser.get(f'https://coinmarketcap.com?page={start_page}')
-			self._close_cookie()
-			self.scroll_until_end()
-
-			self.pull = models.Pull()
-			self.pull.save()
-
-	def close(self):
-		self.browser.close()
-		self.browser.quit()
-
-	def _close_cookie(self):
-		cookie = self.browser.find_elements_by_css_selector('div.cmc-cookie-policy-banner__close')
-			
-		if len(cookie):
-			cookie[0].click()
-
-	def scroll_until_end(self): 
-		SCROLL_PAUSE_TIME = 0.5
-
-		max_height = self.browser.execute_script("return document.body.scrollHeight")
-		window_height = self.browser.execute_script("return window.innerHeight")
-		current_height = window_height
-		while current_height < max_height:
-			self.browser.execute_script(f'window.scrollTo(0, {current_height});')
-			current_height += window_height
-			sleep(SCROLL_PAUSE_TIME)
-
-
-	def infinite_scroll(self): 
-		SCROLL_PAUSE_TIME = 0.5
-
-		# Get scroll height
-		last_height = self.browser.execute_script("return document.body.scrollHeight")
-
-		while True:
-			# Scroll down to bottom
-			self.browser.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-
-			# Wait to load page
-			sleep(SCROLL_PAUSE_TIME)
-
-			# Calculate new scroll height and compare with last scroll height
-			new_height = self.browser.execute_script("return document.body.scrollHeight")
-			if new_height == last_height:
-				break
-			last_height = new_height
-
-	def rank_page(self, count=0):
-		trs = self.browser.find_elements_by_css_selector(".cmc-table tr")
-		
-		for tr in trs:
-			s = BeautifulSoup(tr.get_attribute("innerHTML"), 'html.parser')
-			cols = s.find_all('td')
-
-			if len(cols) > 3:
-				count += 1
-				symbol_sup = cols[2].find('a', class_='cmc-link')
-
-				link = symbol_sup['href']
-				re_search = re.search('/currencies/(.*)/', link, re.IGNORECASE)
-				if re_search:
-						link = re_search.group(1)
-				
-				if not symbol_sup.find('div'):
-					name = symbol_sup.find_all('span')[1].text
-				else:
-					name = symbol_sup.find('div').find('div').find('p').text
-
-				if symbol_sup.find('p', class_='coin-item-symbol'):
-					symbol = symbol_sup.find('p', class_='coin-item-symbol').text
-				else:
-					symbol = symbol_sup.find('span', class_='crypto-symbol').text
-
-				price = convert_price_to_num(cols[3].text)
-				market_cap = 0
-				volume = 0
-
-				if len(cols) > 7:
-					if cols[6].find('span'):
-						market_cap = convert_price_to_num(cols[6].find('span').find_next_sibling('span').text)
-					if cols[7].find('a', class_='cmc-link'):
-						volume = convert_price_to_num(cols[7].find('a', class_='cmc-link').text)
-				
-				try:
-					c = models.Crypto.objects.get(name=name, symbol=symbol, link=link)
-				except models.Crypto.DoesNotExist:
-					c = models.Crypto()
-					c.name = name
-					c.symbol = symbol
-					c.link = link
-					c.save()
-
-				try:
-					cd = models.Data.objects.get(pull=self.pull, crypto=c)
-				except models.Data.DoesNotExist:
-					cd = models.Data()
-					cd.pull = self.pull
-					cd.crypto = c
-					cd.rank_num = count
-					cd.price = float(price)
-					cd.market_cap = float(market_cap)
-					cd.volume = float(volume)
-					cd.save()
-
-					try:
-						previous_data = models.Data.objects.get(pull=self.previous_pull, crypto=c)
-						
-						d = models.Delta()
-						d.crypto = c
-						d.data1 = previous_data
-						d.data2 = cd
-						d.hours_between = round((cd.created - previous_data.created).total_seconds() / 3600, 1)
-						d.rank_num = previous_data.rank_num - cd.rank_num
-						d.price = round(100 * (cd.price - previous_data.price)/previous_data.price, 2) if previous_data.price != 0 else 0
-						d.market_cap = round(100 * (cd.market_cap - previous_data.market_cap)/previous_data.market_cap, 2) if previous_data.market_cap != 0 else 0
-						d.volume = round(100 * (cd.volume - previous_data.volume)/previous_data.volume, 2) if previous_data.volume != 0 else 0
-						d.save()
-					except models.Data.DoesNotExist:
-						print('new crypto!', c.symbol, c.name, c.link)
-
-		return count
-
-	def next_page(self):
-		next_link = self.browser.find_elements_by_css_selector("ul.pagination li.next a")
-
-		if len(next_link):
-			has_next = 'disabled' not in next_link[-1].find_element_by_xpath('..').get_attribute("class")
-			
-			if has_next:
-				next_link[-1].click()
-				self.scroll_until_end()
-
-			return has_next
-		return False
+		if p > 6 and vol > 50000 and mc > 40000 and mc < 50 * 1000000: #and v > 7
+			good_ones.append({
+				'c': c[0]['link'], 
+				'pump': int(100*(c[-1]['price']-min(prices))/min(prices)), 
+				'p': p, 
+				'v': v, 
+				'vol': round(vol/1000000,2),
+				'mc': round(mc/1000000,2)
+			})
 	
-	def _action_move_to_logo(self, action):
-		logo = self.browser.find_elements_by_xpath("//a[contains(@class,'cmc-logo-link')]")
-		action.move_to_element(logo[0]).perform()
-
-	def _save_community(self, crypto, link):
-		href = link.get_attribute('href')
-		re_search = re.search('.*?//(.*?)/.*', href, re.IGNORECASE)
-		if re_search:
-			host = re_search.group(1)
-			
-			try:
-				c = models.Community.objects.get(host=host)
-			except models.Community.DoesNotExist:
-				c = models.Community()
-				c.host = host
-				c.save()
-
-			try:
-				cc = models.CryptoCommunity.objects.get(crypto=crypto, community=c, link=href)
-			except models.CryptoCommunity.DoesNotExist:
-				cc = models.CryptoCommunity()
-				cc.crypto = crypto
-				cc.community = c
-				cc.link = href
-				cc.save()
-
-	def _get_community(self, crypto, action): 
-		com = self.browser.find_elements_by_xpath("//div[contains(@class,'buttonName')][contains(.,'Community')]")
-		
-		if len(com):
-			com = com[0].find_element_by_xpath('..')
-
-			if com.get_attribute('href'):
-				self._save_community(crypto, com)
-			else:
-				action.move_to_element(com).perform()
-				popup_links = self.browser.find_elements_by_xpath("//div[contains(@class,'tippy-content')]//ul//li//a")
-				for link in popup_links:
-					self._save_community(crypto, link)					
-
-				self._action_move_to_logo(action)
-
-	def _get_website(self, crypto, action):
-		com = self.browser.find_elements_by_xpath("//div[contains(@class,'buttonName')][contains(.,'Website')]")
-		if len(com):
-			action.move_to_element(com[0].find_element_by_xpath('..')).perform()
-			popup_links = self.browser.find_elements_by_xpath("//div[contains(@class,'tippy-content')]//ul//li//a")
-		else:
-			popup_links = self.browser.find_elements_by_xpath("//ul[contains(@class,'content')]//li//a")
-			if len(popup_links):
-				popup_links = popup_links[:1]
-			else:
-				popup_links = []
-			
-		for link in popup_links:
-			href = link.get_attribute('href')
-			
-			try:
-				cw = models.CryptoWebsite.objects.get(crypto=crypto, link=href)
-			except models.CryptoWebsite.DoesNotExist:
-				cw = models.CryptoWebsite()
-				cw.crypto = crypto
-				cw.link = href
-				cw.save()
-		
-		if len(com):
-			self._action_move_to_logo(action)
-
-	def _get_source_code(self, crypto):
-		com = self.browser.find_elements_by_xpath("//div[contains(@class,'buttonName')][contains(.,'Source code')]")
-		if len(com):
-			link = com[0].find_element_by_xpath('..')
-			href = link.get_attribute('href')
-			
-			if href:
-				crypto.source_code = href
-				crypto.save()
-
-	def _get_tags(self, crypto):
-		view_all = self.browser.find_elements_by_xpath("//li[contains(@class,'tagBadge')][contains(@class,'viewAll')]")
-		if len(view_all):
-			view_all[0].click()
-			
-		elements = self.browser.find_elements_by_xpath("//div[contains(@class,'tagBadge')]")
-		for e in elements:
-			link = e.find_element_by_xpath('..')
-			href = link.get_attribute('href')
-			name = e.text
-
-			if name:
-				try:
-					t = models.Tag.objects.get(name=name)
-
-					if not t.link and href:
-						t.link = href
-						t.save()
-				except models.Tag.DoesNotExist:
-					t = models.Tag()
-					t.name = name
-					t.link = href
-					t.save()
-
-				try:
-					ct = models.CryptoTag.objects.get(crypto=crypto, tag=t)
-				except models.CryptoTag.DoesNotExist:
-					ct = models.CryptoTag() 
-					ct.crypto = crypto
-					ct.tag = t
-					ct.save()
-
-	def _get_markets(self, crypto):
-		self.browser.get(f'https://coinmarketcap.com/currencies/{crypto.link}/markets/')
-		# self._close_cookie()
-		wait_random(1,2)
-		self.scroll_until_end()
-		elements = self.browser.find_elements_by_xpath("//table[contains(@class,'cmc-table')]//tbody//tr")
-		for tr in elements:
-			try:
-				a = tr.find_elements_by_xpath(".//td[2]//a")
-
-				if len(a):
-					a = a[0]
-					cmc_link = a.get_attribute('href')
-					name = a.text
-
-					try:
-						e = models.Exchange.objects.get(name=name)
-					except models.Exchange.DoesNotExist:
-						e = models.Exchange() 
-						e.name = name
-						e.cmc_link = cmc_link
-						e.save()
-
-					a = tr.find_elements_by_xpath(".//td[3]//a")
-					if len(a):
-						a = a[0]
-						link = a.get_attribute('href')
-						pair = a.text
-
-						try:
-							ce = models.CryptoExchange.objects.get(crypto=crypto, exchange=e, pair=pair, link=link)
-						except models.CryptoExchange.DoesNotExist:
-							ce = models.CryptoExchange() 
-							ce.crypto = crypto
-							ce.exchange = e
-							ce.pair = pair
-							ce.link = link
-							ce.save()
-			except StaleElementReferenceException as e:
-				print(e)
-
-	def crypto_page(self, crypto, tz):
-		self.browser.get(f'https://coinmarketcap.com/currencies/{crypto.link}/')
-		self._close_cookie()
-		action = ActionChains(self.browser)
-		
-		self._get_community(crypto, action)
-		self._get_website(crypto, action)
-		self._get_source_code(crypto)
-		self._get_tags(crypto)
-		self._get_markets(crypto) 
-
-		crypto.updated = djangotimezone.now()
-		crypto.save()
-
- 
-def run():	 
-	while True:
-		tz = timezone('America/Sao_Paulo')
-		should_pull = True
-		p = None
-
-		try:
-			p = models.Pull.objects.latest('id')
-			should_pull = p.created.astimezone(tz).isoformat() < (datetime.now(tz) - timedelta(hours=1)).isoformat()
-		except models.Crypto.DoesNotExist:
-			pass
-		
-		print(datetime.now(tz).isoformat(), f'should_pull: {should_pull}')
-
-		if should_pull:
-			erro = False
-
-			try:
-				browser = webdriver.Firefox()
-				browser.implicitly_wait(3)
-				page = cmc(browser, 1, p)
-			except Exception as e:
-				print(f'Erro ocorreu! {e}')
-				erro = True
-				
-			if not erro:
-				count = 0
-				while True:
-					count = page.rank_page(count)
-					if not page.next_page():
-						break
-
-				page.close()
-		else:
-		  pass
-			# browser = webdriver.Firefox()
-			# browser.implicitly_wait(2)
-			# page = cmc(browser, 1, p, create_pull=False)
-			# max_per_turn = 120
-			
-			# for crypto in models.Crypto.objects.order_by('updated'):
-			# 	page.crypto_page(crypto, tz)
-			# 	max_per_turn -= 1
-
-			# 	if max_per_turn == 0:
-			# 		page.close()
-			# 		break
-
-			# 	wait_random(2, 4)
-
-		wait_random(1*60, 3*60)
+	# good_ones.sort(key=lambda x: x['v']+x['p']-x['pump']/10, reverse=True)
+	good_ones.sort(key=lambda x: x['mc'], reverse=True)
 	
-# https://coinmarketcap.com/historical/
+	t = PrettyTable(['Link', 'pump', 'up', 'mc', 'vol'])	
+	for g in good_ones:
+		t.add_row([g["c"], f'{g["pump"]}%', f'{g["p"]} {g["v"]}', f'{g["mc"]}M', f'{g["vol"]}M'])
+	print(t)
 
-run()
+
+def fill_data_each_hour(data, hours_period):
+	for c in data:
+		start = c['data'][0]['created']
+		end = c['data'][-1]['created']
+		data_points = []
+		while start < end + timedelta(hours = 1):
+			data_points.append({'created': start, 'price': 0, 'volume': 0, 'market_cap': 0})
+			start += timedelta(hours = 1)
+
+		for i in range(len(c['data'])):
+			for j in range(len(data_points)):
+				if data_points[j]['created'] - timedelta(hours = 0.5) <= c['data'][i]['created'] <= data_points[j]['created'] + timedelta(hours = 0.5):
+					k = j
+					while k >= 0 and data_points[k]['price'] == 0:
+						k -= 1
+					last_k_filled = k
+
+					k = j
+					while k > last_k_filled:
+						if k == j:
+							data_points[k]['price'] = c['data'][i]['price']
+							data_points[k]['volume'] = c['data'][i]['volume']
+							data_points[k]['market_cap'] = c['data'][i]['market_cap']
+						else:
+							data_points[k]['price'] = c['data'][i]['price'] + (j-k) * (data_points[last_k_filled]['price'] - c['data'][i]['price']) / (j-last_k_filled)
+							data_points[k]['volume'] = c['data'][i]['volume'] + (j-k) * (data_points[last_k_filled]['volume'] - c['data'][i]['volume']) / (j-last_k_filled)
+							data_points[k]['market_cap'] = c['data'][i]['market_cap'] + (j-k) * (data_points[last_k_filled]['market_cap'] - c['data'][i]['market_cap']) / (j-last_k_filled)
+						k -= 1
+					break
+
+		if data_points[-1]['price'] == 0:
+			data_points = data_points[:-1]
+		data_points = data_points[-hours_period:]
+		
+		c['data'] = data_points
+		# print(json.dumps(data_points, default=str, indent=2))
+
+	return data
+
+def organize_data(c):
+	res = {'id' : c[0]['id'], 'link': c[0]['link'], 'data': []}
+	for d in c:
+		res['data'].append({'created': d['created'], 'price': d['price'], 'volume': d['volume'], 'market_cap': d['market_cap']})
+	return res
+
+def get_data(hours_period):
+	corrected_data = []
+	for c in get_last_pulls_pancakeswap(hours_period):
+		corrected_data.append(organize_data(c))
+	# print(corrected_data)
+	return fill_data_each_hour(corrected_data, hours_period)
+
+def plot_regression(hourly_points):
+	x = range(len(hourly_points))
+	y = hourly_points
+	slope, intercept, r_value, p_value, std_err = stats.linregress(x, y)
+	regression_y = [intercept + slope*x for x in range(len(hourly_points))]
+	average = (sum(hourly_points) / len(hourly_points))
+	slope_relation_average_vol = 100 * slope / average
+	diff_regression = [hourly_points[i] - regression_y[i] for i in range(len(hourly_points))]
+	greater_than_regression = [x > 0 for x in diff_regression]
+	
+	# plt.plot(x, y, 'o', label='original data')
+	# plt.plot(x, intercept + slope*x, 'r', label='fitted line')
+	# plt.legend()
+	# plt.show()
+
+	return (slope_relation_average_vol, greater_than_regression, diff_regression, average)
+
+def get_volatility_position(hourly_points):
+	if not hourly_points or not len(hourly_points):
+		return (0, 0)
+
+	minimo = min(hourly_points)
+	maximo = max(hourly_points)
+
+	if minimo == 0 or minimo == maximo:
+		return (0, 0)
+
+	volatility = int(100 * maximo / minimo)
+	position = int(100 * (hourly_points[-1] - minimo) / (maximo - minimo))
+
+	return (volatility, position)
+
+def alert_volume_regression_positive(hours_period=60, last_hours_above_regression=2):
+	chosen = []
+	for c in get_data(hours_period):
+		# if len(chosen) > 3:
+		# 	break
+		# print(json.dumps(c, default=str, indent=2))
+		hourly_vols = [x['volume'] for x in c['data']]
+		hourly_price = [x['price'] for x in c['data']]
+
+		volatility, position = get_volatility_position(hourly_price)
+		vol_volatility, vol_position = get_volatility_position(hourly_vols)
+
+		if volatility == 0 or vol_volatility == 0:
+			continue
+		
+		slope_relation_average_vol, greater_than_regression, diff_regression, average = plot_regression(hourly_vols)
+		slope_relation_average_price, greater_than_regression_price, diff_regression_price, average_price = plot_regression(hourly_price)
+		
+		price_ind = 100 * (slope_relation_average_price + 3 * diff_regression_price[-1] / average_price)
+		vol_ind = 100 * (slope_relation_average_vol + 3 * diff_regression[-1] / average)
+
+		if not math.isnan(price_ind) and not math.isnan(vol_ind) and position > 0: # and slope_relation_average_vol > 0.6: # and reduce((lambda x, y: x * y), greater_than_regression[-last_hours_above_regression:]):
+			chosen.append({'link': c['link'], 'vol': int(vol_ind), 'price': int(price_ind), 
+											'volatility': volatility, 'position': position, 'mc': round(c['data'][-1]['market_cap'] / 1000000, 2)})
+	
+	chosen.sort(key=lambda x: x['price'], reverse=True)
+	# t = PrettyTable(['Link', 'volume', 'volatility', 'position', 'mc'])	
+	# for g in chosen:
+	# 	t.add_row([g['link'], f'{g["vol"]}', f'{g["volatility"]}', f'{g["position"]}', f'{g["mc"]}'])
+	# print(t)
+
+	return chosen
+
+
+def good_ones(request):
+	try:
+			abrir_conexao()
+			# run()
+			# alert_growing_ps()
+			g = alert_volume_regression_positive(85, 3)
+			fechar_conexao()
+
+			return HttpResponse(json.dumps(g), content_type="application/json")
+	except:
+			print("Erro aconteceu: ", traceback.format_exc())
+			return HttpResponse(None)
+
