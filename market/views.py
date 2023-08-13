@@ -462,6 +462,37 @@ def purchase_weapon(request):
 
 	return HttpResponse('ok')
 
+def transfer_all_BNB(address_from, pk_from, address_to):
+	nonce = web3.eth.get_transaction_count(address_from)
+	gas_price = web3.eth.gas_price
+	gas_limit = 21000  # standard for a value transfer
+	value = web3.eth.get_balance(address_from) - gas_price * gas_limit  # transfer all balance after covering gas
+
+	transaction = {
+		'to': address_to,
+		'value': value,
+		'gas': gas_limit,
+		'gasPrice': gas_price,
+		'nonce': nonce,
+		'chainId': 56  # 56 is for Binance Smart Chain Mainnet
+	}
+	# print(transaction)
+	signed_tx = web3.eth.account.sign_transaction(transaction, pk_from)
+	# print(signed_tx)
+	tx_hash = web3.eth.send_raw_transaction(signed_tx.rawTransaction)
+	print(f"Transaction hash: {tx_hash.hex()}")
+
+# index_to = 1
+# address_to = web3.to_checksum_address(my_accounts[index_to])
+# for i in range(len(my_accounts)):
+# 	if i != index_to:
+# 		address_from = web3.to_checksum_address(my_accounts[i])
+# 		balance = web3.eth.get_balance(address_from)
+# 		print(i, balance,  21000 * web3.eth.gas_price, balance -  21000 * web3.eth.gas_price)
+# 		if balance > 21000 * web3.eth.gas_price:
+# 			transfer_all_BNB(address_from, pks[i], address_to)
+			
+
 def getStatPatternFromProperties(properties):
   return (properties >> 5) & 0x7f
 
