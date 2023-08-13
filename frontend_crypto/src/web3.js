@@ -23,12 +23,12 @@ const conMarket = new web3.eth.Contract(NFTMarket, marketAddress);
 // const conOracle = new web3.eth.Contract(BasicPriceOracle, oracleAddress);
 
 // const isAddress = address => web3.utils.isAddress(address);
-// const getBNBBalance = address => web3.eth.getBalance(address);
-// const fromEther = (value) => web3.utils.fromWei(BigInt(value).toString(), 'ether');
+// const getBNBBalance = address => web3.eth.get_balance(address);
+// const fromEther = (value) => web3.from_wei(BigInt(value).toString(), 'ether');
 
 // export const getRewardsPoolBalance = () => conStakingToken.methods.balanceOf(mainAddress).call({ from: defaultAddress });
 // export const getStakingPoolBalance = () => conStakingToken.methods.balanceOf(stakingRewardAddress).call({ from: defaultAddress });
 
 // const getStakedBalance = address => conStakingToken.methods.balanceOf(address).call({ from: defaultAddress });
-export const fromEther = (value) => web3.utils.fromWei(BigInt(value).toString(), 'ether');
+export const fromEther = (value) => web3.from_wei(BigInt(value).toString(), 'ether');
 export const getFinalPrice = async (tokenId, contract) => conMarket.methods.getFinalPrice(contract || weapAddress, tokenId).call({ from: defaultAddress })

@@ -56,25 +56,29 @@ function App() {
 		
 		let accs = []
 
-		let chars = await apiMy("characters")
-		chars.map(c => {
-			let acc = get_acc(my_accs, accs, c.owner)
-			c.level_reach = get_level_reach(xp_table, c.level, c.xp, c.xp_unclaimed)
-			acc.chars.push(c)
-		})
+		// let chars = await apiMy("characters")
+		// chars.map(c => {
+		// 	let acc = get_acc(my_accs, accs, c.owner)
+		// 	c.level_reach = get_level_reach(xp_table, c.level, c.xp, c.xp_unclaimed)
+		// 	acc.chars.push(c)
+		// })
 
-		let weapons = await apiMy("weapons")
-		weapons.map(w => {
-			let acc = get_acc(my_accs, accs, w.owner)
-			w.traitsPower = [];
-			[0,1,2,3].map(i => 
-				w.traitsPower.push((1 + (
-					traitPower(i, w.stat1Element, w.stat1Value) +
-					traitPower(i, w.stat2Element, w.stat2Value) +
-					traitPower(i, w.stat3Element, w.stat3Value) 
-				)) * (i == w.weaponElement ? 1.075 : 1))
-			)
-			acc.weapons.push(w)
+		// let weapons = await apiMy("weapons")
+		// weapons.map(w => {
+		// 	let acc = get_acc(my_accs, accs, w.owner)
+		// 	w.traitsPower = [];
+		// 	[0,1,2,3].map(i => 
+		// 		w.traitsPower.push((1 + (
+		// 			traitPower(i, w.stat1Element, w.stat1Value) +
+		// 			traitPower(i, w.stat2Element, w.stat2Value) +
+		// 			traitPower(i, w.stat3Element, w.stat3Value) 
+		// 		)) * (i == w.weaponElement ? 1.075 : 1))
+		// 	)
+		// 	acc.weapons.push(w)
+		// })
+
+		my_accs.map(m => {
+			get_acc(my_accs, accs, m.address)
 		})
 
 		accs.map(acc => {
@@ -118,9 +122,11 @@ function App() {
 
 		setAccounts(accs)
 		setMyAccounts(my_accs)
-		setBnbUsd(price[0].value)
-		setSkillUsd(price[1].value)
-		setOracleSkillUsd(price[2].value)
+		if(price.length) {
+			setBnbUsd(price[0].value)
+			setSkillUsd(price[1].value)
+			setOracleSkillUsd(price[2].value)
+		}
 	}, [])
 
   useEffect(() => {
@@ -275,9 +281,9 @@ function App() {
                   </tr>
                 </thead>
                 <tbody>
-									{accounts.map((acc, accIndex) => (
+									{accounts?.map((acc, accIndex) => (
 										<>
-										{acc.items.map((item, index) => (
+										{acc.items?.map((item, index) => (
                     	<tr key={index}>
 												{index === 0 && (
 													<>

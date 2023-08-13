@@ -1,0 +1,7 @@
+django
+django-cors-headers
+djangorestframework
+mysqlclient
+mysql-connector-python
+prettytable
+

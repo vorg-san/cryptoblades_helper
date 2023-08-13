@@ -1,4 +1,3 @@
-import winsound
 from django.shortcuts import render
 from django.urls import reverse
 from eth_utils import address
@@ -20,9 +19,10 @@ import time, json
 # from .contract import abi_market
 import os
 import math
+from os import path
 from web3.middleware import geth_poa_middleware
 from cryptography.fernet import Fernet
-
+from decouple import config
 
 market_address = '0x90099dA42806b21128A094C713347C7885aF79e2'	
 weapons_address = '0x7e091b0a220356b157131c831258a9c98ac8031a'
@@ -36,14 +36,25 @@ staking_reward_address = '0xd6b2D8f59Bf30cfE7009fB4fC00a7b13Ca836A2c'
 oracle_address = '0x1cbfa0ec28da66896946474b2a93856eb725fbba'
 
 fernet = Fernet(b'TaWqdy14AjiDuDZeepJsPZnnRsWgNhOaU5ScPycRpNE=')
-pks = fernet.decrypt(os.environ['pks'].encode()).decode().split(',')
+pks = fernet.decrypt(config('pks').encode()).decode().split(',')
 my_accounts = list(models.PersonalAccount.objects.all().values_list('address', flat=True))
+# pks = []
+# my_accounts = []
 
-# to add one more account
-# p = models.PersonalAccount()
-# p.name = f'acc 23'
-# p.address = ''
-# p.save()
+# print(my_accounts)
+# print(pks)
+
+# to add more accounts, use export
+# add_acc = [
+#           "xx"
+#         ]
+# count = 2
+# for a in add_acc:
+# 	p = models.PersonalAccount()
+# 	p.name = f'acc {count:02}'
+# 	p.address = a
+# 	p.save()
+# 	count += 1
 
 # to add one more pk
 # pks.append('')
@@ -53,33 +64,33 @@ my_accounts = list(models.PersonalAccount.objects.all().values_list('address', f
 web3 = Web3(Web3.HTTPProvider('https://bsc-dataseed1.defibit.io/'))
 web3.middleware_onion.inject(geth_poa_middleware, layer=0)
 
-with open(os.path.dirname(__file__) + '\\contracts\\NFTMarket.json') as json_file:
+with open(os.path.dirname(__file__) + f'{path.sep}contracts{path.sep}NFTMarket.json') as json_file:
     abi_market = json.load(json_file)['abi']
-with open(os.path.dirname(__file__) + '\\contracts\\Weapons.json') as json_file:
+with open(os.path.dirname(__file__) + f'{path.sep}contracts{path.sep}Weapons.json') as json_file:
     abi_weapons = json.load(json_file)['abi']
-with open(os.path.dirname(__file__) + '\\contracts\\Characters.json') as json_file:
+with open(os.path.dirname(__file__) + f'{path.sep}contracts{path.sep}Characters.json') as json_file:
     abi_characters = json.load(json_file)['abi']
-with open(os.path.dirname(__file__) + '\\contracts\\CryptoBlades.json') as json_file:
+with open(os.path.dirname(__file__) + f'{path.sep}contracts{path.sep}CryptoBlades.json') as json_file:
     abi_cryptoblades = json.load(json_file)['abi']
-with open(os.path.dirname(__file__) + '\\contracts\\PancakeFactory.json') as json_file:
+with open(os.path.dirname(__file__) + f'{path.sep}contracts{path.sep}PancakeFactory.json') as json_file:
     abi_pancake_factory = json.load(json_file)['abi']
-with open(os.path.dirname(__file__) + '\\contracts\\PancakePair.json') as json_file:
+with open(os.path.dirname(__file__) + f'{path.sep}contracts{path.sep}PancakePair.json') as json_file:
     abi_pancake_pair = json.load(json_file)['abi']
-with open(os.path.dirname(__file__) + '\\contracts\\SkillToken.json') as json_file:
+with open(os.path.dirname(__file__) + f'{path.sep}contracts{path.sep}SkillToken.json') as json_file:
     abi_skill = json.load(json_file)['abi']
-with open(os.path.dirname(__file__) + '\\contracts\\StakingRewards.json') as json_file:
+with open(os.path.dirname(__file__) + f'{path.sep}contracts{path.sep}StakingRewards.json') as json_file:
     abi_staking_rewards = json.load(json_file)['abi']
-with open(os.path.dirname(__file__) + '\\contracts\\BasicPriceOracle.json') as json_file:
+with open(os.path.dirname(__file__) + f'{path.sep}contracts{path.sep}BasicPriceOracle.json') as json_file:
     abi_oracle = json.load(json_file)['abi']
  
-market_contract = web3.eth.contract(address=web3.toChecksumAddress(market_address), abi=abi_market)
-weapons_contract = web3.eth.contract(address=web3.toChecksumAddress(weapons_address), abi=abi_weapons)
-characters_contract = web3.eth.contract(address=web3.toChecksumAddress(characters_address), abi=abi_characters)
-cryptoblades_contract = web3.eth.contract(address=web3.toChecksumAddress(cryptoblades_address), abi=abi_cryptoblades)
-pancake_factory_contract = web3.eth.contract(address=web3.toChecksumAddress(pancake_factory_address), abi=abi_pancake_factory)
-skill_contract = web3.eth.contract(address=web3.toChecksumAddress(SKILL_address), abi=abi_skill)
-staking_rewards_contract = web3.eth.contract(address=web3.toChecksumAddress(staking_reward_address), abi=abi_staking_rewards)
-oracle_contract = web3.eth.contract(address=web3.toChecksumAddress(oracle_address), abi=abi_oracle)
+market_contract = web3.eth.contract(address=web3.to_checksum_address(market_address), abi=abi_market)
+weapons_contract = web3.eth.contract(address=web3.to_checksum_address(weapons_address), abi=abi_weapons)
+characters_contract = web3.eth.contract(address=web3.to_checksum_address(characters_address), abi=abi_characters)
+cryptoblades_contract = web3.eth.contract(address=web3.to_checksum_address(cryptoblades_address), abi=abi_cryptoblades)
+pancake_factory_contract = web3.eth.contract(address=web3.to_checksum_address(pancake_factory_address), abi=abi_pancake_factory)
+skill_contract = web3.eth.contract(address=web3.to_checksum_address(SKILL_address), abi=abi_skill)
+staking_rewards_contract = web3.eth.contract(address=web3.to_checksum_address(staking_reward_address), abi=abi_staking_rewards)
+oracle_contract = web3.eth.contract(address=web3.to_checksum_address(oracle_address), abi=abi_oracle)
 
 num_market_list_per_call = 3000
 
@@ -88,8 +99,8 @@ def get_transactions(account):
 	pass
 
 def get_pair_price_now(addr1, addr2):
-	pair_address = pancake_factory_contract.functions.getPair(web3.toChecksumAddress(addr1), web3.toChecksumAddress(addr2)).call()
-	pancake_pair_contract = web3.eth.contract(address=web3.toChecksumAddress(pair_address), abi=abi_pancake_pair)
+	pair_address = pancake_factory_contract.functions.getPair(web3.to_checksum_address(addr1), web3.to_checksum_address(addr2)).call()
+	pancake_pair_contract = web3.eth.contract(address=web3.to_checksum_address(pair_address), abi=abi_pancake_pair)
 	reserve1, reserve2, _ = pancake_pair_contract.functions.getReserves().call()
 	return reserve2 / reserve1
 
@@ -106,7 +117,7 @@ def update_price(id, value):
 def update_prices():
 	bnb_usd_price = get_pair_price_now(BNB_address, BUSD_address)
 	skill_usd_price = get_pair_price_now(SKILL_address, BNB_address) * bnb_usd_price
-	oracle_price = 1 / web3.fromWei(oracle_contract.functions.currentPrice().call(), 'ether')
+	oracle_price = 1 / web3.from_wei(oracle_contract.functions.currentPrice().call(), 'ether')
 
 	update_price(1, bnb_usd_price)
 	update_price(2, skill_usd_price)
@@ -133,9 +144,9 @@ def get_fight_results(txs):
 		f.address = logs['owner']
 		f.character = logs['character']
 		f.xp = logs['xpGain']
-		f.skill_earned = float(web3.fromWei(logs['skillGain'], 'ether'))
+		f.skill_earned = float(web3.from_wei(logs['skillGain'], 'ether'))
 		f.skill_dollar_price = skill_usd_price
-		f.bnb_cost = float(web3.fromWei(receipt['gasUsed'], 'ether') * web3.toWei('5', 'gwei'))
+		f.bnb_cost = float(web3.from_wei(receipt['gasUsed'], 'ether') * web3.toWei('5', 'gwei'))
 		f.bnb_dollar_price = bnb_usd_price
 		f.usd_cost = f.bnb_cost * f.bnb_dollar_price
 		f.usd_earned = f.skill_earned * f.skill_dollar_price
@@ -171,7 +182,7 @@ def transfer_character(request):
 				if len(cryptoblades_contract.functions.getMyCharacters().call({'from': post_to})) < 4:
 					nonce = web3.eth.getTransactionCount(post_from)
 					transaction = characters_contract.functions.safeTransferFrom(
-								web3.toChecksumAddress(post_from), web3.toChecksumAddress(post_to), post_token_id
+								web3.to_checksum_address(post_from), web3.to_checksum_address(post_to), post_token_id
 							).buildTransaction({
 								'gas': 200000,
 								'gasPrice': web3.toWei('5', 'gwei'),
@@ -204,7 +215,7 @@ def transfer_weapon(request):
 		if post_from in my_accounts and post_to in my_accounts:
 			nonce = web3.eth.getTransactionCount(post_from)
 			transaction = weapons_contract.functions.safeTransferFrom(
-						web3.toChecksumAddress(post_from), web3.toChecksumAddress(post_to), post_token_id
+						web3.to_checksum_address(post_from), web3.to_checksum_address(post_to), post_token_id
 					).buildTransaction({
 						'gas': 200000,
 						'gasPrice': web3.toWei('5', 'gwei'),
@@ -228,12 +239,12 @@ def from_game_to_stake(request):
 	return HttpResponse('ok')
 	for i in [1]:
 		nonce = web3.eth.getTransactionCount(my_accounts[i])
-		my_in_game = web3.fromWei(cryptoblades_contract.functions.getTokenRewardsFor(web3.toChecksumAddress(my_accounts[i])).call(), 'ether')
+		my_in_game = web3.from_wei(cryptoblades_contract.functions.getTokenRewardsFor(web3.to_checksum_address(my_accounts[i])).call(), 'ether')
 		print(my_in_game)
 
 		if my_in_game > 0.1:
 			while True:
-				game_contract_skill = web3.fromWei(skill_contract.functions.balanceOf(web3.toChecksumAddress(cryptoblades_address)).call(), 'ether')	
+				game_contract_skill = web3.from_wei(skill_contract.functions.balanceOf(web3.to_checksum_address(cryptoblades_address)).call(), 'ether')	
 				print(game_contract_skill, my_in_game)
 				if(game_contract_skill > my_in_game):
 					# transaction = cryptoblades_contract.functions.stakeUnclaimedRewards().buildTransaction({
@@ -302,7 +313,7 @@ def decode_character(data):
 	}
 
 def get_gas_prediction():
-	print(market_contract.functions.getListingIDs(web3.toChecksumAddress(weapons_address)).call())
+	print(market_contract.functions.getListingIDs(web3.to_checksum_address(weapons_address)).call())
 	pass
 
 @csrf_exempt
@@ -323,7 +334,7 @@ def do_fights(request):
 					
 					my_acc = my_accounts[index_account]
 
-					bnb_balance = web3.fromWei(web3.eth.getBalance(web3.toChecksumAddress(my_acc)), 'ether')
+					bnb_balance = web3.from_wei(web3.eth.get_balance(web3.to_checksum_address(my_acc)), 'ether')
 					if bnb_balance < 0.0014 :
 						print(f'acc {index_account+1} out of funds')
 						continue
@@ -472,21 +483,34 @@ def getStat3Trait(statPattern):
 def trait_power(wElement, sElement, sValue):
 	return sValue * (0.002675 if wElement == sElement else 0.002575 if sElement == '4' else 0.0025)
 
+def beep():
+	import platform
+	import os
+
+	if platform.system() == "Windows":
+		import winsound
+		winsound.Beep(300, 150)  
+	elif platform.system() == "Darwin":  # macOS
+		os.system('say "beep"')  # This uses the 'say' command to make a sound on macOS
+	elif platform.system() == "Linux":
+		os.system('beep')  # Assumes the 'beep' package is installed on Linux
+
+
 def warn_if_interesting(item_name, id, price, power):
 	if item_name == 'weapon':
 		if (price < 0.4 and power >= 2.7) or (power > 3 and price <= 1.2):
 			print(f'SEE WEAPON {id}: power {power} for {price} skill')
-			winsound.Beep(300, 150)  
+			beep()
 	else:
 		if price < 0.19 and power >= 30:
 			print(f'SEE CHAR {id}: level {power} for {price} skill')
-			# winsound.Beep(300, 150)  
+			# beep() 
 
 def insert_new_char(id, price, seller, owner):
 	character_data = decode_character(characters_contract.functions.get(id).call())
 							
 	new = models.Character()
-	new.price = float(web3.fromWei(price, 'ether')) * 1.1
+	new.price = float(web3.from_wei(price, 'ether')) * 1.1
 	new.charId = id
 	new.seller = seller
 	new.owner = owner
@@ -509,7 +533,7 @@ def insert_new_weapon(id, price, seller, owner):
 
 	if getStarsFromProperties(properties) >= 4 or (seller == '' and getStarsFromProperties(properties) >= 3):
 		new = models.Weapon()
-		new.price = float(web3.fromWei(price, 'ether')) * 1.1
+		new.price = float(web3.from_wei(price, 'ether')) * 1.1
 		new.weaponId = id
 		new.seller = seller
 		new.owner = owner
@@ -536,25 +560,25 @@ def update_my_chars_and_weapons(addresses):
 	update_prices()
 	
 	for address in addresses:
-		if market_contract.functions.isUserBanned(address).call():
-			print(f'BANNED {address}!!!')
+		# if market_contract.functions.isUserBanned(address).call():
+		# 	print(f'BANNED {address}!!!')
 
 		a = models.PersonalAccount.objects.filter(address=address)[0]
-		a.bnb = web3.fromWei(web3.eth.getBalance(web3.toChecksumAddress(address)), 'ether')	
-		a.skill = web3.fromWei(skill_contract.functions.balanceOf(web3.toChecksumAddress(address)).call(), 'ether')
-		a.skill_staked = web3.fromWei(staking_rewards_contract.functions.balanceOf(web3.toChecksumAddress(address)).call(), 'ether')
-		a.skill_in_game = web3.fromWei(cryptoblades_contract.functions.getTokenRewardsFor(web3.toChecksumAddress(address)).call(), 'ether')	
+		a.bnb = web3.from_wei(web3.eth.get_balance(web3.to_checksum_address(address)), 'ether')	
+		a.skill = web3.from_wei(skill_contract.functions.balanceOf(web3.to_checksum_address(address)).call(), 'ether')
+		a.skill_staked = web3.from_wei(staking_rewards_contract.functions.balanceOf(web3.to_checksum_address(address)).call(), 'ether')
+		a.skill_in_game = web3.from_wei(cryptoblades_contract.functions.getTokenRewardsFor(web3.to_checksum_address(address)).call(), 'ether')	
 		a.save()
 
-		models.Weapon.objects.filter(owner=address).delete()
-		weapons = cryptoblades_contract.functions.getMyWeapons().call({'from': address})
-		for weapon in weapons:
-			insert_new_weapon(weapon, 0.01, '', address)
+		# models.Weapon.objects.filter(owner=address).delete()
+		# weapons = cryptoblades_contract.functions.getMyWeapons().call({'from': address})
+		# for weapon in weapons:
+		# 	insert_new_weapon(weapon, 0.01, '', address)
 
-		models.Character.objects.filter(owner=address).delete()							
-		characters = cryptoblades_contract.functions.getMyCharacters().call({'from': address})
-		for char in characters:
-			insert_new_char(char, 0.01, '', address)
+		# models.Character.objects.filter(owner=address).delete()							
+		# characters = cryptoblades_contract.functions.getMyCharacters().call({'from': address})
+		# for char in characters:
+		# 	insert_new_char(char, 0.01, '', address)
 
 		print(f'__ {address} updated')
 
@@ -609,11 +633,11 @@ class PersonalAccountView(viewsets.ModelViewSet):
 
 def read_market_weapons(request):
 	while True:
-		read_market('weapon', web3.toChecksumAddress(weapons_address), models.Weapon)
+		read_market('weapon', web3.to_checksum_address(weapons_address), models.Weapon)
 
 def read_market_chars(request):
 	while True:
-		read_market('character', web3.toChecksumAddress(characters_address), models.Character)
+		read_market('character', web3.to_checksum_address(characters_address), models.Character)
 		wait_random(25, 69)
 
 def read_market(item_name, item_address, item_model):
@@ -657,18 +681,18 @@ def read_market(item_name, item_address, item_model):
 							allowed.add(sellers[i])
 
 							if item_name == 'weapon':
-								if float(web3.fromWei(prices[i], 'ether')) < 1.5:
+								if float(web3.from_wei(prices[i], 'ether')) < 1.5:
 									inserted += insert_new_weapon(ids[i], prices[i], sellers[i], '')
 									db = item_model.objects.all()	
 							else:
-								if float(web3.fromWei(prices[i], 'ether')) < 0.25:
+								if float(web3.from_wei(prices[i], 'ether')) < 0.25:
 									inserted += insert_new_char(ids[i], prices[i], sellers[i], '')
 									db = item_model.objects.all()	
 				else:
 					if prices[i] == 0:
 						item_by_id[0].delete()
 					else: 
-						new_p = float(web3.fromWei(prices[i], 'ether')) * 1.1
+						new_p = float(web3.from_wei(prices[i], 'ether')) * 1.1
 
 						if new_p != item_by_id[0].price:
 							item_by_id[0].price = new_p
@@ -685,12 +709,12 @@ def read_market(item_name, item_address, item_model):
 
 def clean_chars(request):
 	while True:
-		clean_market(models.Character, 'char', web3.toChecksumAddress(characters_address), 'charId')
+		clean_market(models.Character, 'char', web3.to_checksum_address(characters_address), 'charId')
 		wait_random(60,80)
 
 def clean_weapons(request):
 	while True:
-		clean_market(models.Weapon, 'weapon', web3.toChecksumAddress(weapons_address), 'weaponId')
+		clean_market(models.Weapon, 'weapon', web3.to_checksum_address(weapons_address), 'weaponId')
 		wait_random(60,80)
 
 def clean_market(model, item_name, item_address, item_id):
@@ -718,7 +742,7 @@ def clean_market(model, item_name, item_address, item_id):
 				else:
 					allowed.append(w.seller)
 
-			price = 1.1 * float(web3.fromWei(market_contract.functions.getSellerPrice(item_address, int(getattr(w, item_id))).call(), 'ether'))
+			price = 1.1 * float(web3.from_wei(market_contract.functions.getSellerPrice(item_address, int(getattr(w, item_id))).call(), 'ether'))
 			total += 1
 			
 			if price == 0:

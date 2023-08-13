@@ -1,7 +1,7 @@
 import axios from 'axios'
 import {trackPromise} from 'react-promise-tracker'
 
-const raizMy = 'http://localhost:7000/'
+const raizMy = 'http://localhost:8000/'
 const urlsMy = {
   weapons: {
     metodo: 'g',
@@ -10,12 +10,12 @@ const urlsMy = {
   },
   characters: {
     metodo: 'g',
-    url: 'api/characters',
+    url: 'api/characters/',
     dados: {},
   },
   personal_account: {
     metodo: 'g',
-    url: 'api/personal_account',
+    url: 'api/personal_account/',
     dados: {},
   },
   transfer_character: {
@@ -75,12 +75,12 @@ const urlsMy = {
   },
   experience_table: {
     metodo: 'g',
-    url: 'api/xp_table',
+    url: 'api/xp_table/',
     dados: {},
   },
   price: {
     metodo: 'g',
-    url: 'api/price',
+    url: 'api/price/',
     dados: {},
   },
 }
